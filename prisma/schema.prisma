@@ -1,0 +1,221 @@
+// Prisma schema for Panso Nestor Sherald Shrimp Farming Management System
+// NextAuth v5 + PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- NextAuth required models ---
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?   // hashed for credentials provider
+  image         String?
+  role          UserRole  @default(FARMER)
+
+  accounts         Account[]
+  sessions         Session[]
+  shrimpInventories ShrimpInventory[]       @relation("ShrimpInventoryOwner")
+  feedingSchedulesAssigned FeedingSchedule[] @relation("AssignedFarmer")
+  feedingConfirmations FeedingConfirmation[]
+  harvestSchedules HarvestSchedule[]
+  harvests         Harvest[]
+  notifications   Notification[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// --- Domain models ---
+enum UserRole {
+  ADMIN
+  FARMER
+}
+
+model Pond {
+  id       String   @id @default(cuid())
+  name     String
+  location String?
+  size     String?  // e.g. "1000 sqm"
+  status   String   @default("ACTIVE") // ACTIVE, INACTIVE, MAINTENANCE
+
+  waterMaintenanceSchedules WaterMaintenanceSchedule[]
+  pondShrimpAssignments     PondShrimpAssignment[]
+  feedingSchedules          FeedingSchedule[]
+  harvestSchedules          HarvestSchedule[]
+  harvests                  Harvest[]
+}
+
+model WaterMaintenanceSchedule {
+  id          String   @id @default(cuid())
+  pondId      String
+  scheduledAt DateTime
+  type        String   // e.g. WATER_CHANGE, AERATION_CHECK, PH_CHECK
+  notes       String?
+  completedAt DateTime?
+
+  pond Pond @relation(fields: [pondId], references: [id], onDelete: Cascade)
+}
+
+model ShrimpType {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  shrimpInventories ShrimpInventory[]
+}
+
+model ShrimpUnit {
+  id           String   @id @default(cuid())
+  name         String   // e.g. KILO, GRAM
+  abbreviation String?
+
+  shrimpInventories ShrimpInventory[]
+  feedsInventories  FeedsInventory[]
+  harvestSchedules  HarvestSchedule[]
+  harvests          Harvest[]
+}
+
+model ShrimpInventory {
+  id           String   @id @default(cuid())
+  shrimpTypeId String
+  unitId       String
+  quantity     Decimal  @db.Decimal(12, 2)
+  userId       String   // farmer who created/owns this entry
+  createdAt    DateTime @default(now())
+
+  shrimpType ShrimpType @relation(fields: [shrimpTypeId], references: [id], onDelete: Cascade)
+  unit       ShrimpUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  user       User       @relation("ShrimpInventoryOwner", fields: [userId], references: [id], onDelete: Cascade)
+  pondAssignments PondShrimpAssignment[]
+}
+
+model PondShrimpAssignment {
+  id                 String   @id @default(cuid())
+  pondId             String
+  shrimpInventoryId  String
+  assignedAt         DateTime @default(now())
+  assignedById       String?
+
+  pond            Pond            @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  shrimpInventory ShrimpInventory @relation(fields: [shrimpInventoryId], references: [id], onDelete: Cascade)
+}
+
+model FeedsInventory {
+  id                String   @id @default(cuid())
+  name              String
+  quantity          Decimal  @db.Decimal(12, 2)
+  unitId            String
+  restockThreshold  Decimal? @db.Decimal(12, 2)
+
+  unit     ShrimpUnit        @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  schedules FeedingSchedule[]
+}
+
+model FeedingSchedule {
+  id                 String   @id @default(cuid())
+  pondId             String
+  feedId             String
+  scheduledAt        DateTime
+  quantity           Decimal  @db.Decimal(12, 2)
+  status             String   @default("PENDING") // PENDING, COMPLETED, MISSED
+  assignedFarmerId   String?
+
+  pond             Pond                  @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  feed             FeedsInventory         @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  assignedFarmer   User?                  @relation("AssignedFarmer", fields: [assignedFarmerId], references: [id], onDelete: SetNull)
+  confirmations    FeedingConfirmation[]
+}
+
+model FeedingConfirmation {
+  id          String   @id @default(cuid())
+  scheduleId  String
+  farmerId    String
+  confirmedAt DateTime @default(now())
+  dispensedQty Decimal @db.Decimal(12, 2)
+  notes       String?
+
+  schedule FeedingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  farmer   User            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+}
+
+model HarvestSchedule {
+  id           String   @id @default(cuid())
+  pondId       String
+  scheduledAt  DateTime
+  estimatedQty Decimal  @db.Decimal(12, 2)
+  unitId       String
+  farmerId     String?
+  status       String   @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+
+  pond   Pond       @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  unit   ShrimpUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  farmer User?      @relation(fields: [farmerId], references: [id], onDelete: SetNull)
+  harvests Harvest[]
+}
+
+model Harvest {
+  id          String   @id @default(cuid())
+  scheduleId  String?
+  pondId      String
+  farmerId    String
+  actualQty   Decimal  @db.Decimal(12, 2)
+  unitId      String
+  harvestedAt DateTime @default(now())
+  notes       String?
+
+  schedule HarvestSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  pond     Pond             @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  farmer   User             @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  unit     ShrimpUnit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  type       String   // LOW_STOCK, MISSED_FEEDING, NEW_HARVEST, etc.
+  message    String
+  read       Boolean  @default(false)
+  relatedId  String?  // optional reference to related entity
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
