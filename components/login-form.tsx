@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Droplets, Fish, Package, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -115,12 +116,37 @@ export function LoginForm({
               </FieldDescription>
             </FieldGroup>
           </form>
-          <div className="bg-muted relative hidden md:block">
-            <img
-              src="/placeholder.svg"
-              alt="Shrimp farming"
-              className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
-            />
+          <div className="bg-muted/80 flex hidden flex-col justify-center gap-6 p-8 md:flex md:p-10">
+            <div className="flex items-center gap-3">
+              <div className="bg-primary/10 text-primary flex h-12 w-12 items-center justify-center rounded-xl">
+                <Fish className="size-6" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-foreground">Shrimp Farming Management</h2>
+                <p className="text-muted-foreground text-sm">Ponds, feeding, harvest & inventory in one place</p>
+              </div>
+            </div>
+            <ul className="text-muted-foreground flex flex-col gap-3 text-sm">
+              <li className="flex items-center gap-2">
+                <Droplets className="text-primary size-4 shrink-0" />
+                Ponds & water maintenance schedules
+              </li>
+              <li className="flex items-center gap-2">
+                <Package className="text-primary size-4 shrink-0" />
+                Feeding schedules and feed inventory
+              </li>
+              <li className="flex items-center gap-2">
+                <Fish className="text-primary size-4 shrink-0" />
+                Shrimp types, units and pond assignments
+              </li>
+              <li className="flex items-center gap-2">
+                <BarChart3 className="text-primary size-4 shrink-0" />
+                Harvest tracking and performance
+              </li>
+            </ul>
+            <p className="text-muted-foreground border-border border-t pt-4 text-xs">
+              Sign in to manage your farm, confirm feedings, declare harvests, and view notifications.
+            </p>
           </div>
         </CardContent>
       </Card>

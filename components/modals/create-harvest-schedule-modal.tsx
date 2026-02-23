@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,25 +11,31 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { declareHarvest } from "@/lib/actions/harvest-declare";
+import { createHarvestSchedule } from "@/lib/actions/harvest";
+
+function getMinDatetimeLocal(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
 
 type Pond = { id: string; name: string };
 type Unit = { id: string; name: string; abbreviation: string | null };
-type Schedule = { id: string; pond: { name: string }; scheduledAt: Date };
+type Farmer = { id: string; name: string | null; email: string };
 
-export function DeclareHarvestModal({
+export function CreateHarvestScheduleModal({
   ponds,
   units,
-  schedules,
+  farmers,
 }: {
   ponds: Pond[];
   units: Unit[];
-  schedules: Schedule[];
+  farmers: Farmer[];
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,12 +43,13 @@ export function DeclareHarvestModal({
     const formData = new FormData(form);
     startTransition(async () => {
       try {
-        await declareHarvest(formData);
-        toast.success("Harvest declared");
+        await createHarvestSchedule(formData);
+        toast.success("Harvest schedule created");
         setOpen(false);
         form.reset();
+        router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to declare harvest");
+        toast.error(err instanceof Error ? err.message : "Failed to create schedule");
       }
     });
   }
@@ -49,17 +57,12 @@ export function DeclareHarvestModal({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Declare harvest</Button>
+        <Button>Create schedule</Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Declare harvest</DialogTitle>
+          <DialogTitle>Set harvest schedule for pond</DialogTitle>
         </DialogHeader>
-        {schedules.length === 0 ? (
-          <p className="text-muted-foreground py-4 text-sm">
-            No harvest schedules exist yet. An admin must create a harvest schedule for a pond before you can declare a harvest.
-          </p>
-        ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <Label htmlFor="pondId">Pond</Label>
@@ -69,6 +72,7 @@ export function DeclareHarvestModal({
               required
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
+              <option value="">Select pond</option>
               {ponds.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -77,8 +81,27 @@ export function DeclareHarvestModal({
             </select>
           </div>
           <div>
-            <Label htmlFor="actualQty">Actual quantity</Label>
-            <Input id="actualQty" name="actualQty" type="number" step="0.01" required />
+            <Label htmlFor="scheduledAt">Scheduled at</Label>
+            <input
+              id="scheduledAt"
+              name="scheduledAt"
+              type="datetime-local"
+              required
+              min={getMinDatetimeLocal()}
+              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+            />
+          </div>
+          <div>
+            <Label htmlFor="estimatedQty">Estimated quantity</Label>
+            <input
+              id="estimatedQty"
+              name="estimatedQty"
+              type="number"
+              step="0.01"
+              required
+              min="0"
+              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+            />
           </div>
           <div>
             <Label htmlFor="unitId">Unit</Label>
@@ -90,44 +113,35 @@ export function DeclareHarvestModal({
             >
               {units.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.name}
+                  {u.name} {u.abbreviation ? `(${u.abbreviation})` : ""}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <Label htmlFor="scheduleId">Linked schedule</Label>
+            <Label htmlFor="farmerId">Assign to farmer (optional)</Label>
             <select
-              id="scheduleId"
-              name="scheduleId"
-              required
+              id="farmerId"
+              name="farmerId"
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
-              <option value="">Select a schedule</option>
-              {schedules.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.pond.name} – {new Date(s.scheduledAt).toLocaleDateString()}
+              <option value="">Any</option>
+              {farmers.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name || f.email}
                 </option>
               ))}
             </select>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Required to avoid variance and keep harvests aligned with planned schedules.
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="notes">Notes</Label>
-            <Input id="notes" name="notes" />
           </div>
           <div className="flex gap-2 justify-end">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Declaring…" : "Declare harvest"}
+              {isPending ? "Creating…" : "Create schedule"}
             </Button>
           </div>
         </form>
-        )}
       </DialogContent>
     </Dialog>
   );

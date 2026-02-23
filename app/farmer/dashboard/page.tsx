@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { redirect } from "next/navigation";
+import { BarChartCard } from "@/components/charts/bar-chart-card";
+import { AreaChartCard } from "@/components/charts/area-chart-card";
 
 export default async function FarmerDashboardPage() {
   const session = await auth();
@@ -14,8 +16,12 @@ export default async function FarmerDashboardPage() {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
   const alarmWindowEnd = new Date(now.getTime() + 30 * 60 * 1000);
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
 
-  const [todaysFeedings, alarmFeedings] = await Promise.all([
+  const [todaysFeedings, alarmFeedings, myHarvests, myInventory] = await Promise.all([
     prisma.feedingSchedule.findMany({
       where: {
         scheduledAt: { gte: todayStart, lt: todayEnd },
@@ -32,7 +38,44 @@ export default async function FarmerDashboardPage() {
       include: { pond: true, feed: true },
       orderBy: { scheduledAt: "asc" },
     }),
+    prisma.harvest.findMany({
+      where: { farmerId: session.user.id, harvestedAt: { gte: sixMonthsAgo } },
+      select: { harvestedAt: true, actualQty: true },
+    }),
+    prisma.shrimpInventory.findMany({
+      where: { userId: session.user.id },
+      include: { shrimpType: true },
+    }),
   ]);
+
+  const monthNames: Record<number, string> = {
+    0: "Jan", 1: "Feb", 2: "Mar", 3: "Apr", 4: "May", 5: "Jun",
+    6: "Jul", 7: "Aug", 8: "Sep", 9: "Oct", 10: "Nov", 11: "Dec",
+  };
+  const harvestsByMonth: { name: string; value: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0, 23, 59, 59);
+    const quantity = myHarvests
+      .filter((h) => h.harvestedAt >= start && h.harvestedAt <= end)
+      .reduce((s, h) => s + Number(h.actualQty), 0);
+    harvestsByMonth.push({
+      name: `${monthNames[month]} ${year}`,
+      value: quantity,
+    });
+  }
+
+  const inventoryByType = Object.entries(
+    myInventory.reduce<Record<string, number>>((acc, i) => {
+      const name = i.shrimpType.name;
+      acc[name] = (acc[name] ?? 0) + Number(i.quantity);
+      return acc;
+    }, {})
+  ).map(([name, value]) => ({ name, value }));
 
   return (
     <>
@@ -83,6 +126,19 @@ export default async function FarmerDashboardPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <AreaChartCard
+          title="My harvests (last 6 months)"
+          data={harvestsByMonth}
+          color="var(--chart-1)"
+        />
+        <BarChartCard
+          title="My inventory by shrimp type"
+          data={inventoryByType}
+          color="var(--chart-2)"
+        />
       </div>
     </>
   );

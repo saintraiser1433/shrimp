@@ -2,17 +2,16 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { DataTableEmpty } from "@/components/data-table-empty";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import { ToastActionButton } from "@/components/toast-action-button";
-import { AddShrimpUnitModal } from "@/components/modals/add-shrimp-unit-modal";
-import { EditShrimpUnitModal } from "@/components/modals/edit-shrimp-unit-modal";
-import { deleteShrimpUnit } from "@/lib/actions/shrimp-units";
+import { AddFarmerModal } from "@/components/modals/add-farmer-modal";
+import { EditFarmerModal } from "@/components/modals/edit-farmer-modal";
+import { deleteFarmer } from "@/lib/actions/farmers";
 
 const DEFAULT_PAGE_SIZE = 10;
 
-export default async function AdminShrimpUnitsPage({
+export default async function AdminFarmersPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string; pageSize?: string }> | { page?: string; pageSize?: string };
@@ -25,24 +24,37 @@ export default async function AdminShrimpUnitsPage({
   const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
   const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
 
-  const [units, totalCount] = await Promise.all([
-    prisma.shrimpUnit.findMany({
+  const [farmers, totalCount] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: "FARMER" },
       orderBy: { name: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        _count: {
+          select: {
+            shrimpInventories: true,
+            harvests: true,
+            feedingConfirmations: true,
+          },
+        },
+      },
     }),
-    prisma.shrimpUnit.count(),
+    prisma.user.count({ where: { role: "FARMER" } }),
   ]);
 
   return (
     <>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Shrimp Units</h1>
-        <AddShrimpUnitModal />
+        <h1 className="text-2xl font-bold">Farmers</h1>
+        <AddFarmerModal />
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Units (e.g. Kilo, Grams)</CardTitle>
+          <CardTitle>Farmer accounts</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -50,40 +62,46 @@ export default async function AdminShrimpUnitsPage({
               <thead>
                 <tr className="border-b">
                   <th className="pb-2 font-medium">Name</th>
-                  <th className="pb-2 font-medium">Abbreviation</th>
+                  <th className="pb-2 font-medium">Email</th>
+                  <th className="pb-2 font-medium">Inventory entries</th>
+                  <th className="pb-2 font-medium">Harvests</th>
+                  <th className="pb-2 font-medium">Feedings confirmed</th>
                   <th className="pb-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {units.length === 0 ? (
+                {farmers.length === 0 ? (
                   <tr>
-                    <td colSpan={3}>
-                      <DataTableEmpty message="No units yet." />
+                    <td colSpan={6}>
+                      <DataTableEmpty message="No farmer accounts yet." />
                     </td>
                   </tr>
                 ) : (
-                  units.map((u) => (
-                    <tr key={u.id} className="border-b">
-                      <td className="py-2 font-medium">{u.name}</td>
-                      <td className="py-2 text-muted-foreground">{u.abbreviation || "—"}</td>
+                  farmers.map((f) => (
+                    <tr key={f.id} className="border-b">
+                      <td className="py-2 font-medium">{f.name || "—"}</td>
+                      <td className="py-2 text-muted-foreground">{f.email}</td>
+                      <td className="py-2">{f._count.shrimpInventories}</td>
+                      <td className="py-2">{f._count.harvests}</td>
+                      <td className="py-2">{f._count.feedingConfirmations}</td>
                       <td className="py-2">
                         <div className="flex items-center gap-2">
-                          <EditShrimpUnitModal
-                            unit={{
-                              id: u.id,
-                              name: u.name,
-                              abbreviation: u.abbreviation,
+                          <EditFarmerModal
+                            farmer={{
+                              id: f.id,
+                              name: f.name,
+                              email: f.email,
                             }}
                           />
                           <ToastActionButton
-                            action={deleteShrimpUnit}
-                            actionArg={u.id}
-                            successMessage="Unit deleted"
-                            errorMessage="Failed to delete unit"
+                            action={deleteFarmer}
+                            actionArg={f.id}
+                            successMessage="Farmer account removed"
+                            errorMessage="Failed to remove farmer"
                             variant="destructive"
                             size="sm"
-                            confirmTitle="Delete unit?"
-                            confirmDescription="This action cannot be undone."
+                            confirmTitle="Remove farmer account?"
+                            confirmDescription="This will permanently delete the account and all related data (inventory, harvests, etc.)."
                           >
                             Delete
                           </ToastActionButton>

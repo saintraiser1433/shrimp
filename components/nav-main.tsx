@@ -15,6 +15,8 @@ import {
   BarChart3,
   Bell,
   CalendarCheck,
+  Users,
+  Settings,
 } from "lucide-react"
 
 import {
@@ -47,6 +49,8 @@ const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   BarChart3,
   Bell,
   CalendarCheck,
+  Users,
+  Settings,
 }
 
 export type NavMainItem = {

@@ -4,16 +4,27 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTableEmpty } from "@/components/data-table-empty";
+import { DataTablePagination } from "@/components/data-table-pagination";
 import { ToastActionButton } from "@/components/toast-action-button";
 import { AssignShrimpModal } from "@/components/modals/assign-shrimp-modal";
 import { unassignShrimpFromPond } from "@/lib/actions/pond-assignments";
 
-export default async function AdminPondAssignmentsPage() {
+const DEFAULT_PAGE_SIZE = 10;
+
+export default async function AdminPondAssignmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }> | { page?: string; pageSize?: string };
+}) {
   const session = await auth();
   if (!session?.user || (session.user as { role?: string }).role !== "ADMIN")
     redirect("/login");
 
-  const [assignments, ponds, inventories] = await Promise.all([
+  const params = await Promise.resolve(searchParams);
+  const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
+  const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
+
+  const [assignments, totalCount, ponds, inventories] = await Promise.all([
     prisma.pondShrimpAssignment.findMany({
       include: {
         pond: true,
@@ -21,7 +32,11 @@ export default async function AdminPondAssignmentsPage() {
           include: { shrimpType: true, unit: true, user: true },
         },
       },
+      orderBy: { assignedAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
+    prisma.pondShrimpAssignment.count(),
     prisma.pond.findMany({ orderBy: { name: "asc" } }),
     prisma.shrimpInventory.findMany({
       include: { shrimpType: true, unit: true, user: true },
@@ -29,13 +44,21 @@ export default async function AdminPondAssignmentsPage() {
     }),
   ]);
 
+  const serializedInventories = inventories.map((i) => ({
+    id: i.id,
+    shrimpType: { name: i.shrimpType.name },
+    quantity: i.quantity.toString(),
+    unit: { abbreviation: i.unit.abbreviation, name: i.unit.name },
+    user: { name: i.user.name, email: i.user.email },
+  }));
+
   return (
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Pond Assignments</h1>
         <AssignShrimpModal
           ponds={ponds.map((p) => ({ id: p.id, name: p.name }))}
-          inventories={inventories}
+          inventories={serializedInventories}
         />
       </div>
       <Card>
@@ -91,6 +114,7 @@ export default async function AdminPondAssignmentsPage() {
               </tbody>
             </table>
           </div>
+          <DataTablePagination totalCount={totalCount} currentPage={page} pageSize={pageSize} />
         </CardContent>
       </Card>
     </>

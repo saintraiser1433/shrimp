@@ -18,7 +18,10 @@ export const adminNavItems: NavItem[] = [
   { title: "Feeding Schedules", url: "/admin/feeding-schedules", iconName: "CalendarClock" },
   { title: "Shrimp Inventory", url: "/admin/shrimp-inventory", iconName: "Warehouse" },
   { title: "Harvest Performance", url: "/admin/harvest-performance", iconName: "BarChart3" },
+  { title: "Harvest Schedules", url: "/admin/harvest-schedules", iconName: "CalendarCheck" },
+  { title: "Farmers", url: "/admin/farmers", iconName: "Users" },
   { title: "Notifications", url: "/admin/notifications", iconName: "Bell" },
+  { title: "Settings", url: "/admin/settings", iconName: "Settings" },
 ];
 
 export function getFarmerNavItems(feedingAlarmCount: number): NavItem[] {

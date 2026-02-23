@@ -17,7 +17,7 @@ type Pond = { id: string; name: string };
 type Inventory = {
   id: string;
   shrimpType: { name: string };
-  quantity: unknown;
+  quantity: string;
   unit: { abbreviation: string | null; name: string };
   user: { name: string | null; email: string };
 };
@@ -85,7 +85,7 @@ export function AssignShrimpModal({
               <option value="">Select inventory</option>
               {inventories.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.shrimpType.name} – {String(i.quantity)} {i.unit.abbreviation || i.unit.name} (
+                  {i.shrimpType.name} – {i.quantity} {i.unit.abbreviation || i.unit.name} (
                   {i.user.name || i.user.email})
                 </option>
               ))}

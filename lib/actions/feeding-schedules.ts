@@ -9,6 +9,9 @@ export async function createFeedingSchedule(formData: FormData) {
   const pondId = formData.get("pondId") as string;
   const feedId = formData.get("feedId") as string;
   const scheduledAt = new Date(formData.get("scheduledAt") as string);
+  if (scheduledAt.getTime() < Date.now()) {
+    throw new Error("Scheduled date and time must be in the future.");
+  }
   const quantity = Number(formData.get("quantity"));
   const assignedFarmerId = (formData.get("assignedFarmerId") as string) || null;
   await prisma.feedingSchedule.create({

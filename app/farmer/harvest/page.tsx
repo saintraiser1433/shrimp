@@ -3,14 +3,26 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTableEmpty } from "@/components/data-table-empty";
+import { DataTablePagination } from "@/components/data-table-pagination";
 import { DeclareHarvestModal } from "@/components/modals/declare-harvest-modal";
 
-export default async function FarmerHarvestPage() {
+const DEFAULT_PAGE_SIZE = 10;
+
+export default async function FarmerHarvestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }> | { page?: string; pageSize?: string };
+}) {
   const session = await auth();
   if (!session?.user || (session.user as { role?: string }).role !== "FARMER")
     redirect("/login");
 
-  const [schedules, ponds, units, recentHarvests] = await Promise.all([
+  const params = await Promise.resolve(searchParams);
+  const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
+  const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
+
+  const harvestWhere = { farmerId: session.user.id };
+  const [schedules, ponds, units, recentHarvests, harvestTotalCount] = await Promise.all([
     prisma.harvestSchedule.findMany({
       where: { status: "SCHEDULED" },
       include: { pond: true, unit: true },
@@ -19,11 +31,13 @@ export default async function FarmerHarvestPage() {
     prisma.pond.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
     prisma.shrimpUnit.findMany({ orderBy: { name: "asc" } }),
     prisma.harvest.findMany({
-      where: { farmerId: session.user.id },
+      where: harvestWhere,
       include: { pond: true, unit: true },
       orderBy: { harvestedAt: "desc" },
-      take: 20,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
+    prisma.harvest.count({ where: harvestWhere }),
   ]);
 
   return (
@@ -116,6 +130,7 @@ export default async function FarmerHarvestPage() {
               </tbody>
             </table>
           </div>
+          <DataTablePagination totalCount={harvestTotalCount} currentPage={page} pageSize={pageSize} />
         </CardContent>
       </Card>
     </>

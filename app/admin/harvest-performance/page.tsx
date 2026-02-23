@@ -81,14 +81,14 @@ export default async function AdminHarvestPerformancePage({
                 </tr>
               </thead>
               <tbody>
-                {harvests.length === 0 ? (
+                {harvestsForTable.length === 0 ? (
                   <tr>
                     <td colSpan={5}>
                       <DataTableEmpty message="No harvests recorded yet." />
                     </td>
                   </tr>
                 ) : (
-                  harvests.map((h) => (
+                  harvestsForTable.map((h) => (
                     <tr key={h.id} className="border-b">
                       <td className="py-2">{h.pond.name}</td>
                       <td className="py-2">{h.actualQty.toString()}</td>

@@ -219,3 +219,13 @@ model Notification {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// Singleton: one row stores SMS gateway settings for the app (reused by Settings and other components)
+model SmsGatewayConfig {
+  id         String   @id @default(cuid())
+  gatewayUrl String
+  username   String
+  password   String
+  testPhone  String?  // optional default test number (+639…)
+  updatedAt  DateTime @updatedAt
+}

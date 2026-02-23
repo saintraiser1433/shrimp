@@ -3,22 +3,38 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTableEmpty } from "@/components/data-table-empty";
+import { DataTablePagination } from "@/components/data-table-pagination";
+import { ToastActionButton } from "@/components/toast-action-button";
 import { CreateFeedingScheduleModal } from "@/components/modals/create-feeding-schedule-modal";
+import { EditFeedingScheduleModal } from "@/components/modals/edit-feeding-schedule-modal";
+import { deleteFeedingSchedule } from "@/lib/actions/feeding-schedules";
 import { markMissedFeedingsAndNotify } from "@/lib/notifications";
 
-export default async function AdminFeedingSchedulesPage() {
+const DEFAULT_PAGE_SIZE = 10;
+
+export default async function AdminFeedingSchedulesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }> | { page?: string; pageSize?: string };
+}) {
   const session = await auth();
   if (!session?.user || (session.user as { role?: string }).role !== "ADMIN")
     redirect("/login");
 
   await markMissedFeedingsAndNotify();
 
-  const [schedules, ponds, feeds, farmers] = await Promise.all([
+  const params = await Promise.resolve(searchParams);
+  const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
+  const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
+
+  const [schedules, totalCount, ponds, feeds, farmers] = await Promise.all([
     prisma.feedingSchedule.findMany({
       include: { pond: true, feed: true, assignedFarmer: true },
       orderBy: { scheduledAt: "desc" },
-      take: 100,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
+    prisma.feedingSchedule.count(),
     prisma.pond.findMany({ orderBy: { name: "asc" } }),
     prisma.feedsInventory.findMany({ include: { unit: true }, orderBy: { name: "asc" } }),
     prisma.user.findMany({ where: { role: "FARMER" }, orderBy: { name: "asc" } }),
@@ -49,12 +65,13 @@ export default async function AdminFeedingSchedulesPage() {
                   <th className="pb-2 font-medium">Quantity</th>
                   <th className="pb-2 font-medium">Status</th>
                   <th className="pb-2 font-medium">Assigned to</th>
+                  <th className="pb-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {schedules.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <DataTableEmpty message="No feeding schedules yet." />
                     </td>
                   </tr>
@@ -69,12 +86,38 @@ export default async function AdminFeedingSchedulesPage() {
                       <td className="py-2 text-muted-foreground">
                         {s.assignedFarmer ? s.assignedFarmer.name || s.assignedFarmer.email : "—"}
                       </td>
+                      <td className="py-2">
+                        <div className="flex items-center gap-2">
+                          <EditFeedingScheduleModal
+                            schedule={{
+                              id: s.id,
+                              scheduledAt: new Date(s.scheduledAt).toISOString(),
+                              quantity: s.quantity.toString(),
+                              assignedFarmerId: s.assignedFarmerId,
+                            }}
+                            farmers={farmers.map((u) => ({ id: u.id, name: u.name, email: u.email }))}
+                          />
+                          <ToastActionButton
+                            action={deleteFeedingSchedule}
+                            actionArg={s.id}
+                            successMessage="Schedule deleted"
+                            errorMessage="Failed to delete schedule"
+                            variant="destructive"
+                            size="sm"
+                            confirmTitle="Delete feeding schedule?"
+                            confirmDescription="This action cannot be undone."
+                          >
+                            Delete
+                          </ToastActionButton>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+          <DataTablePagination totalCount={totalCount} currentPage={page} pageSize={pageSize} />
         </CardContent>
       </Card>
     </>

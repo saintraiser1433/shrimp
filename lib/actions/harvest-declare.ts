@@ -10,8 +10,14 @@ export async function declareHarvest(formData: FormData) {
   const pondId = formData.get("pondId") as string;
   const actualQty = Number(formData.get("actualQty"));
   const unitId = formData.get("unitId") as string;
-  const scheduleId = (formData.get("scheduleId") as string) || null;
+  const scheduleIdRaw = (formData.get("scheduleId") as string) || "";
+  const scheduleId = scheduleIdRaw.trim() || null;
   const notes = (formData.get("notes") as string) || "";
+
+  if (!scheduleId) {
+    throw new Error("A linked schedule is required. Select the harvest schedule this harvest fulfills to avoid variance and confusion.");
+  }
+
   const pond = await prisma.pond.findUnique({ where: { id: pondId } });
   const unit = await prisma.shrimpUnit.findUnique({ where: { id: unitId } });
   const harvest = await prisma.harvest.create({
@@ -24,12 +30,10 @@ export async function declareHarvest(formData: FormData) {
       notes,
     },
   });
-  if (scheduleId) {
-    await prisma.harvestSchedule.update({
-      where: { id: scheduleId },
-      data: { status: "COMPLETED" },
-    });
-  }
+  await prisma.harvestSchedule.update({
+    where: { id: scheduleId },
+    data: { status: "COMPLETED" },
+  });
   await createNotificationForAdmins(
     "NEW_HARVEST",
     `Harvest declared: ${actualQty} ${unit?.abbreviation || unit?.name || "units"} for pond ${pond?.name || pondId}.`,

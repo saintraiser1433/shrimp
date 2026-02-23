@@ -14,6 +14,6 @@ export async function createHarvestSchedule(formData: FormData) {
   await prisma.harvestSchedule.create({
     data: { pondId, scheduledAt, estimatedQty, unitId, farmerId },
   });
-  revalidatePath("/admin/feeding-schedules");
+  revalidatePath("/admin/harvest-schedules");
   revalidatePath("/farmer/harvest");
 }

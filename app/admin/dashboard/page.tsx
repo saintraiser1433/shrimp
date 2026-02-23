@@ -2,18 +2,86 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { redirect } from "next/navigation";
+import { BarChartCard } from "@/components/charts/bar-chart-card";
+import { AreaChartCard } from "@/components/charts/area-chart-card";
 
 export default async function AdminDashboardPage() {
   const session = await auth();
   if (!session?.user || (session.user as { role?: string }).role !== "ADMIN")
     redirect("/login");
 
-  const [pondCount, feedCount, scheduleCount, harvestCount] = await Promise.all([
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+
+  const [
+    pondCount,
+    feedCount,
+    scheduleCount,
+    harvestCount,
+    harvestsWithPond,
+    feedingByStatus,
+    harvestsLast6Months,
+  ] = await Promise.all([
     prisma.pond.count(),
     prisma.feedsInventory.count(),
     prisma.feedingSchedule.count({ where: { status: "PENDING" } }),
     prisma.harvest.count(),
+    prisma.harvest.findMany({
+      include: { pond: true },
+      orderBy: { harvestedAt: "desc" },
+      take: 500,
+    }),
+    prisma.feedingSchedule.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    }),
+    prisma.harvest.findMany({
+      where: { harvestedAt: { gte: sixMonthsAgo } },
+      select: { harvestedAt: true, actualQty: true },
+    }),
   ]);
+
+  const harvestByPond = Object.entries(
+    harvestsWithPond.reduce<Record<string, number>>((acc, h) => {
+      const name = h.pond.name;
+      acc[name] = (acc[name] ?? 0) + Number(h.actualQty);
+      return acc;
+    }, {})
+  )
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
+  const monthNames: Record<number, string> = {
+    0: "Jan", 1: "Feb", 2: "Mar", 3: "Apr", 4: "May", 5: "Jun",
+    6: "Jul", 7: "Aug", 8: "Sep", 9: "Oct", 10: "Nov", 11: "Dec",
+  };
+  const harvestsByMonth: { name: string; count: number; quantity: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const key = `${year}-${month}`;
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0, 23, 59, 59);
+    const inMonth = harvestsLast6Months.filter(
+      (h) => h.harvestedAt >= start && h.harvestedAt <= end
+    );
+    harvestsByMonth.push({
+      name: `${monthNames[month]} ${year}`,
+      count: inMonth.length,
+      quantity: inMonth.reduce((s, h) => s + Number(h.actualQty), 0),
+    });
+  }
+
+  const feedingStatusData = [
+    { name: "Pending", value: feedingByStatus.find((s) => s.status === "PENDING")?._count.id ?? 0 },
+    { name: "Completed", value: feedingByStatus.find((s) => s.status === "COMPLETED")?._count.id ?? 0 },
+    { name: "Missed", value: feedingByStatus.find((s) => s.status === "MISSED")?._count.id ?? 0 },
+  ];
 
   return (
     <>
@@ -55,6 +123,26 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <BarChartCard
+          title="Harvest quantity by pond (top 10)"
+          data={harvestByPond}
+          color="var(--chart-1)"
+        />
+        <AreaChartCard
+          title="Harvests over last 6 months"
+          data={harvestsByMonth.map((m) => ({ name: m.name, value: m.quantity }))}
+          color="var(--chart-2)"
+        />
+      </div>
+
+      <BarChartCard
+        title="Feeding schedule status"
+        data={feedingStatusData}
+        color="var(--chart-3)"
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Admin overview</CardTitle>

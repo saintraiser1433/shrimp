@@ -4,17 +4,35 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTableEmpty } from "@/components/data-table-empty";
+import { DataTablePagination } from "@/components/data-table-pagination";
 import { ToastActionButton } from "@/components/toast-action-button";
 import { AddShrimpTypeModal } from "@/components/modals/add-shrimp-type-modal";
 import { EditShrimpTypeModal } from "@/components/modals/edit-shrimp-type-modal";
 import { deleteShrimpType } from "@/lib/actions/shrimp-types";
 
-export default async function AdminShrimpTypesPage() {
+const DEFAULT_PAGE_SIZE = 10;
+
+export default async function AdminShrimpTypesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }> | { page?: string; pageSize?: string };
+}) {
   const session = await auth();
   if (!session?.user || (session.user as { role?: string }).role !== "ADMIN")
     redirect("/login");
 
-  const types = await prisma.shrimpType.findMany({ orderBy: { name: "asc" } });
+  const params = await Promise.resolve(searchParams);
+  const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
+  const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
+
+  const [types, totalCount] = await Promise.all([
+    prisma.shrimpType.findMany({
+      orderBy: { name: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.shrimpType.count(),
+  ]);
 
   return (
     <>
@@ -71,6 +89,7 @@ export default async function AdminShrimpTypesPage() {
               </tbody>
             </table>
           </div>
+          <DataTablePagination totalCount={totalCount} currentPage={page} pageSize={pageSize} />
         </CardContent>
       </Card>
     </>

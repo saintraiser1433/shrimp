@@ -4,21 +4,36 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTableEmpty } from "@/components/data-table-empty";
+import { DataTablePagination } from "@/components/data-table-pagination";
 import { ToastActionButton } from "@/components/toast-action-button";
 import { CreateShrimpInventoryModal } from "@/components/modals/create-shrimp-inventory-modal";
 import { deleteShrimpInventory } from "@/lib/actions/shrimp-inventory";
 
-export default async function FarmerShrimpInventoryPage() {
+const DEFAULT_PAGE_SIZE = 10;
+
+export default async function FarmerShrimpInventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }> | { page?: string; pageSize?: string };
+}) {
   const session = await auth();
   if (!session?.user || (session.user as { role?: string }).role !== "FARMER")
     redirect("/login");
 
-  const [inventories, types, units] = await Promise.all([
+  const params = await Promise.resolve(searchParams);
+  const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
+  const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
+
+  const where = { userId: session.user.id };
+  const [inventories, totalCount, types, units] = await Promise.all([
     prisma.shrimpInventory.findMany({
-      where: { userId: session.user.id },
+      where,
       include: { shrimpType: true, unit: true },
       orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
+    prisma.shrimpInventory.count({ where }),
     prisma.shrimpType.findMany({ orderBy: { name: "asc" } }),
     prisma.shrimpUnit.findMany({ orderBy: { name: "asc" } }),
   ]);
@@ -80,6 +95,7 @@ export default async function FarmerShrimpInventoryPage() {
               </tbody>
             </table>
           </div>
+          <DataTablePagination totalCount={totalCount} currentPage={page} pageSize={pageSize} />
         </CardContent>
       </Card>
     </>
