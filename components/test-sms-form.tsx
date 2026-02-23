@@ -22,42 +22,8 @@ export function TestSmsForm({ initialData }: { initialData: SmsSettings | null }
   const password = initialData?.password ?? DEFAULT_PASSWORD;
   const phone = initialData?.testPhone ?? DEFAULT_PHONE;
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const action = formData.get("action");
-    if (action === "save") {
-      startTransition(async () => {
-        const result = await saveSmsSettings(formData);
-        if (result.ok) {
-          toast.success("Settings saved. Other components will use these to send SMS.");
-          router.refresh();
-        } else {
-          toast.error(result.error);
-        }
-      });
-      return;
-    }
-    if (action === "send") {
-      const code = (formData.get("code") as string)?.trim();
-      if (!code) {
-        toast.error("Enter a message to send.");
-        return;
-      }
-      startTransition(async () => {
-        const result = await sendTestSms(formData);
-        if (result.ok) {
-          toast.success("Test SMS sent.");
-        } else {
-          toast.error(result.error);
-        }
-      });
-    }
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-sm">
+    <form className="flex flex-col gap-4 max-w-sm" onSubmit={(e) => e.preventDefault()}>
       <div>
         <Label htmlFor="gatewayUrl">Gateway URL</Label>
         <Input
@@ -120,10 +86,49 @@ export function TestSmsForm({ initialData }: { initialData: SmsSettings | null }
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" name="action" value="save" variant="secondary" disabled={isPending}>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={isPending}
+          onClick={(e) => {
+            const form = (e.currentTarget as HTMLButtonElement).form;
+            if (!form) return;
+            const formData = new FormData(form);
+            startTransition(async () => {
+              const result = await saveSmsSettings(formData);
+              if (result.ok) {
+                toast.success("Settings saved. Other components will use these to send SMS.");
+                router.refresh();
+              } else {
+                toast.error(result.error);
+              }
+            });
+          }}
+        >
           {isPending ? "Saving…" : "Save settings"}
         </Button>
-        <Button type="submit" name="action" value="send" disabled={isPending}>
+        <Button
+          type="button"
+          disabled={isPending}
+          onClick={(e) => {
+            const form = (e.currentTarget as HTMLButtonElement).form;
+            if (!form) return;
+            const formData = new FormData(form);
+            const code = (formData.get("code") as string)?.trim();
+            if (!code) {
+              toast.error("Enter a message to send.");
+              return;
+            }
+            startTransition(async () => {
+              const result = await sendTestSms(formData);
+              if (result.ok) {
+                toast.success("Test SMS sent.");
+              } else {
+                toast.error(result.error);
+              }
+            });
+          }}
+        >
           {isPending ? "Sending…" : "Send test SMS"}
         </Button>
       </div>

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateFarmer } from "@/lib/actions/farmers";
 
-type FarmerRow = { id: string; name: string | null; email: string };
+type FarmerRow = { id: string; name: string | null; email: string; phone: string | null };
 
 export function EditFarmerModal({ farmer }: { farmer: FarmerRow }) {
   const [open, setOpen] = useState(false);
@@ -68,6 +68,17 @@ export function EditFarmerModal({ farmer }: { farmer: FarmerRow }) {
               required
               defaultValue={farmer.email}
             />
+          </div>
+          <div>
+            <Label htmlFor={`edit-phone-${farmer.id}`}>Phone (Philippines +639…)</Label>
+            <Input
+              id={`edit-phone-${farmer.id}`}
+              name="phone"
+              type="tel"
+              defaultValue={farmer.phone ?? ""}
+              placeholder="+639171234567"
+            />
+            <p className="text-muted-foreground text-xs mt-1">Philippine mobile format, e.g. +639171234567. Leave blank to clear.</p>
           </div>
           <div>
             <Label htmlFor={`edit-newPassword-${farmer.id}`}>New password (optional)</Label>

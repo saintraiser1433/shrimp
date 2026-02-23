@@ -56,6 +56,17 @@ export function AddFarmerModal() {
             <Input id="email" name="email" type="email" required placeholder="farmer@example.com" />
           </div>
           <div>
+            <Label htmlFor="phone">Phone (Philippines +639…)</Label>
+            <Input
+              id="phone"
+              name="phone"
+              type="tel"
+              required
+              placeholder="+639171234567"
+            />
+            <p className="text-muted-foreground text-xs mt-1">Philippine mobile format, e.g. +639171234567</p>
+          </div>
+          <div>
             <Label htmlFor="password">Password</Label>
             <Input
               id="password"

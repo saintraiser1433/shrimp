@@ -34,6 +34,7 @@ export default async function AdminFarmersPage({
         id: true,
         name: true,
         email: true,
+        phone: true,
         _count: {
           select: {
             shrimpInventories: true,
@@ -63,6 +64,7 @@ export default async function AdminFarmersPage({
                 <tr className="border-b">
                   <th className="pb-2 font-medium">Name</th>
                   <th className="pb-2 font-medium">Email</th>
+                  <th className="pb-2 font-medium">Phone</th>
                   <th className="pb-2 font-medium">Inventory entries</th>
                   <th className="pb-2 font-medium">Harvests</th>
                   <th className="pb-2 font-medium">Feedings confirmed</th>
@@ -72,7 +74,7 @@ export default async function AdminFarmersPage({
               <tbody>
                 {farmers.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <DataTableEmpty message="No farmer accounts yet." />
                     </td>
                   </tr>
@@ -81,6 +83,7 @@ export default async function AdminFarmersPage({
                     <tr key={f.id} className="border-b">
                       <td className="py-2 font-medium">{f.name || "—"}</td>
                       <td className="py-2 text-muted-foreground">{f.email}</td>
+                      <td className="py-2">{f.phone || "—"}</td>
                       <td className="py-2">{f._count.shrimpInventories}</td>
                       <td className="py-2">{f._count.harvests}</td>
                       <td className="py-2">{f._count.feedingConfirmations}</td>
@@ -91,6 +94,7 @@ export default async function AdminFarmersPage({
                               id: f.id,
                               name: f.name,
                               email: f.email,
+                              phone: f.phone,
                             }}
                           />
                           <ToastActionButton

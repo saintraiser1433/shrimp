@@ -6,7 +6,7 @@ import { sendSmsWithConfig } from "@/lib/sms-gateway";
 import { requireAdmin } from "@/lib/auth";
 
 const PH_PREFIX = "+639";
-const PH_MOBILE_LENGTH = 12; // +639 + 9 digits
+const PH_MOBILE_LENGTH = 13; // "+639" (4 chars) + 9 digits
 
 function normalizePhone(input: string): string {
   const trimmed = input.trim();

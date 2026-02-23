@@ -18,12 +18,15 @@ model User {
   emailVerified DateTime?
   password      String?   // hashed for credentials provider
   image         String?
+  phone         String?   // Philippine mobile +639… for SMS
   role          UserRole  @default(FARMER)
 
   accounts         Account[]
   sessions         Session[]
   shrimpInventories ShrimpInventory[]       @relation("ShrimpInventoryOwner")
   feedingSchedulesAssigned FeedingSchedule[] @relation("AssignedFarmer")
+  waterMaintenanceSchedulesAssigned WaterMaintenanceSchedule[] @relation("WaterMaintenanceAssignedFarmer")
+  waterMaintenanceCompletionRequests WaterMaintenanceSchedule[] @relation("WaterMaintenanceCompletionRequestedBy")
   feedingConfirmations FeedingConfirmation[]
   harvestSchedules HarvestSchedule[]
   harvests         Harvest[]
@@ -85,14 +88,18 @@ model Pond {
 }
 
 model WaterMaintenanceSchedule {
-  id          String   @id @default(cuid())
-  pondId      String
-  scheduledAt DateTime
-  type        String   // e.g. WATER_CHANGE, AERATION_CHECK, PH_CHECK
-  notes       String?
-  completedAt DateTime?
+  id                    String    @id @default(cuid())
+  pondId                String
+  scheduledAt           DateTime
+  type                  String    // e.g. WATER_CHANGE, AERATION_CHECK, PH_CHECK
+  notes                 String?
+  completedAt           DateTime?
+  assignedFarmerId      String?
+  completionRequestedBy  String?   // farmer who requested completion; admin must approve or reject
 
-  pond Pond @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  pond          Pond  @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  assignedFarmer User? @relation("WaterMaintenanceAssignedFarmer", fields: [assignedFarmerId], references: [id], onDelete: SetNull)
+  requestedBy    User? @relation("WaterMaintenanceCompletionRequestedBy", fields: [completionRequestedBy], references: [id], onDelete: SetNull)
 }
 
 model ShrimpType {

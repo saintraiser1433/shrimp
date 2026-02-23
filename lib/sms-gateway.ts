@@ -20,7 +20,7 @@ export async function sendSmsWithConfig(
   if (!baseUrl || !config.username || !config.password) {
     return { ok: false, error: "Gateway URL, username, and password are required." };
   }
-  const url = `${baseUrl}/message`;
+  const url = `${baseUrl}/messages`;
   const auth = Buffer.from(`${config.username}:${config.password}`).toString("base64");
   try {
     const res = await fetch(url, {

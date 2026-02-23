@@ -34,6 +34,7 @@ export function getFarmerNavItems(feedingAlarmCount: number): NavItem[] {
       iconName: "CalendarClock",
       badgeCount: feedingAlarmCount > 0 ? feedingAlarmCount : undefined,
     },
+    { title: "Water maintenance", url: "/farmer/water-maintenance", iconName: "Droplets" },
     { title: "Harvest", url: "/farmer/harvest", iconName: "CalendarCheck" },
   ];
 }

@@ -7,6 +7,10 @@ import {
   createWaterMaintenance,
   updatePond,
 } from "@/lib/actions/ponds";
+import {
+  approveWaterMaintenanceCompletion,
+  rejectWaterMaintenanceCompletion,
+} from "@/lib/actions/water-maintenance";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,12 +28,25 @@ export default async function PondDetailPage({
     return null;
 
   const { id } = await params;
-  const pond = await prisma.pond.findUnique({
-    where: { id },
-    include: {
-      waterMaintenanceSchedules: { orderBy: { scheduledAt: "desc" } },
-    },
-  });
+  const [pond, farmers] = await Promise.all([
+    prisma.pond.findUnique({
+      where: { id },
+      include: {
+        waterMaintenanceSchedules: {
+          orderBy: { scheduledAt: "desc" },
+          include: {
+            assignedFarmer: { select: { id: true, name: true, email: true } },
+            requestedBy: { select: { id: true, name: true, email: true } },
+          },
+        },
+      },
+    }),
+    prisma.user.findMany({
+      where: { role: "FARMER" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
+    }),
+  ]);
   if (!pond) notFound();
 
   return (
@@ -107,6 +124,21 @@ export default async function PondDetailPage({
               <Input id="type" name="type" placeholder="e.g. WATER_CHANGE" required />
             </div>
             <div>
+              <Label htmlFor="assignedFarmerId">Assign to farmer</Label>
+              <select
+                id="assignedFarmerId"
+                name="assignedFarmerId"
+                className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+              >
+                <option value="">None</option>
+                {farmers.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name || f.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <Label htmlFor="notes">Notes</Label>
               <Input id="notes" name="notes" />
             </div>
@@ -118,28 +150,67 @@ export default async function PondDetailPage({
             {pond.waterMaintenanceSchedules.map((s) => (
               <li
                 key={s.id}
-                className="flex items-center justify-between rounded border p-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded border p-3"
               >
                 <div>
                   <span className="font-medium">{s.type}</span> –{" "}
                   {new Date(s.scheduledAt).toLocaleString()}
+                  {s.assignedFarmer && (
+                    <> · Assigned: {s.assignedFarmer.name || s.assignedFarmer.email}</>
+                  )}
+                  {s.requestedBy && (
+                    <> · <span className="text-amber-600 dark:text-amber-500">Pending approval</span> (requested by {s.requestedBy.name || s.requestedBy.email})</>
+                  )}
                   {s.notes && ` – ${s.notes}`}
                   {s.completedAt && (
                     <span className="text-muted-foreground ml-2">(completed)</span>
                   )}
                 </div>
-                {!s.completedAt && (
-                  <ToastActionButton
-                    action={completeWaterMaintenance}
-                    actionArg={s.id}
-                    successMessage="Marked complete"
-                    errorMessage="Failed to mark complete"
-                    variant="outline"
-                    size="sm"
-                  >
-                    Mark complete
-                  </ToastActionButton>
-                )}
+                <div className="flex items-center gap-2">
+                  {s.completedAt ? null : s.completionRequestedBy ? (
+                    <>
+                      <ToastActionButton
+                        action={approveWaterMaintenanceCompletion}
+                        actionArg={s.id}
+                        successMessage="Completion approved"
+                        errorMessage="Failed to approve"
+                        variant="default"
+                        size="sm"
+                        confirmTitle="Approve completion?"
+                        confirmDescription="This will mark the water maintenance as complete. The farmer will see the updated status."
+                      >
+                        Approve
+                      </ToastActionButton>
+                      <ToastActionButton
+                        action={rejectWaterMaintenanceCompletion}
+                        actionArg={s.id}
+                        successMessage="Completion request rejected"
+                        errorMessage="Failed to reject"
+                        variant="destructive"
+                        size="sm"
+                        confirmTitle="Reject completion request?"
+                        confirmDescription="The schedule will return to pending. The farmer can request completion again after doing the work."
+                      >
+                        Reject
+                      </ToastActionButton>
+                    </>
+                  ) : s.assignedFarmerId ? (
+                    <span className="text-muted-foreground text-sm">Waiting for request completion</span>
+                  ) : (
+                    <ToastActionButton
+                      action={completeWaterMaintenance}
+                      actionArg={s.id}
+                      successMessage="Marked complete"
+                      errorMessage="Failed to mark complete"
+                      variant="outline"
+                      size="sm"
+                      confirmTitle="Mark as complete?"
+                      confirmDescription="This will mark the water maintenance schedule as completed."
+                    >
+                      Mark complete
+                    </ToastActionButton>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
