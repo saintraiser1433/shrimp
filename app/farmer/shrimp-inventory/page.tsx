@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { DataTableEmpty } from "@/components/data-table-empty";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import { ToastActionButton } from "@/components/toast-action-button";
@@ -10,6 +10,17 @@ import { CreateShrimpInventoryModal } from "@/components/modals/create-shrimp-in
 import { deleteShrimpInventory } from "@/lib/actions/shrimp-inventory";
 
 const DEFAULT_PAGE_SIZE = 10;
+
+function getStatusVariant(status: string): "default" | "secondary" | "outline" {
+  switch (status) {
+    case "HARVESTED":
+      return "secondary";
+    case "IN_POND":
+      return "default";
+    default:
+      return "outline";
+  }
+}
 
 export default async function FarmerShrimpInventoryPage({
   searchParams,
@@ -28,7 +39,15 @@ export default async function FarmerShrimpInventoryPage({
   const [inventories, totalCount, types, units] = await Promise.all([
     prisma.shrimpInventory.findMany({
       where,
-      include: { shrimpType: true, unit: true },
+      include: {
+        shrimpType: true,
+        unit: true,
+        pondAssignments: {
+          include: {
+            pond: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -59,13 +78,15 @@ export default async function FarmerShrimpInventoryPage({
                   <th className="pb-2 font-medium">Type</th>
                   <th className="pb-2 font-medium">Quantity</th>
                   <th className="pb-2 font-medium">Unit</th>
+                  <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 font-medium">Assigned pond(s)</th>
                   <th className="pb-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {inventories.length === 0 ? (
                   <tr>
-                    <td colSpan={4}>
+                    <td colSpan={6}>
                       <DataTableEmpty message="No inventory entries yet." />
                     </td>
                   </tr>
@@ -75,6 +96,16 @@ export default async function FarmerShrimpInventoryPage({
                       <td className="py-2">{i.shrimpType.name}</td>
                       <td className="py-2">{i.quantity.toString()}</td>
                       <td className="py-2">{i.unit.abbreviation || i.unit.name}</td>
+                      <td className="py-2">
+                        <Badge variant={getStatusVariant(i.status)}>
+                          {i.status.replaceAll("_", " ")}
+                        </Badge>
+                      </td>
+                      <td className="py-2">
+                        {i.pondAssignments.length > 0
+                          ? i.pondAssignments.map((assignment) => assignment.pond.name).join(", ")
+                          : "—"}
+                      </td>
                       <td className="py-2">
                         <ToastActionButton
                           action={deleteShrimpInventory}

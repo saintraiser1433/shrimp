@@ -14,9 +14,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateShrimpType } from "@/lib/actions/shrimp-types";
 
-type ShrimpTypeRow = { id: string; name: string; description: string | null };
+type ShrimpTypeRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  defaultFeedingIntervalDays: number | null;
+  defaultFeedingQty: string | null;
+  defaultFeedingUnitId: string | null;
+};
+type ShrimpUnit = { id: string; name: string; abbreviation: string | null };
 
-export function EditShrimpTypeModal({ type }: { type: ShrimpTypeRow }) {
+export function EditShrimpTypeModal({
+  type,
+  units,
+}: {
+  type: ShrimpTypeRow;
+  units: ShrimpUnit[];
+}) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -63,6 +77,44 @@ export function EditShrimpTypeModal({ type }: { type: ShrimpTypeRow }) {
               name="description"
               defaultValue={type.description ?? ""}
             />
+          </div>
+          <div>
+            <Label htmlFor={`edit-defaultFeedingIntervalDays-${type.id}`}>
+              Default feeding interval (days)
+            </Label>
+            <Input
+              id={`edit-defaultFeedingIntervalDays-${type.id}`}
+              name="defaultFeedingIntervalDays"
+              type="number"
+              min="1"
+              defaultValue={type.defaultFeedingIntervalDays ?? ""}
+            />
+          </div>
+          <div>
+            <Label htmlFor={`edit-defaultFeedingQty-${type.id}`}>Default feeding quantity</Label>
+            <Input
+              id={`edit-defaultFeedingQty-${type.id}`}
+              name="defaultFeedingQty"
+              type="number"
+              step="0.01"
+              defaultValue={type.defaultFeedingQty ?? ""}
+            />
+          </div>
+          <div>
+            <Label htmlFor={`edit-defaultFeedingUnitId-${type.id}`}>Default feeding unit</Label>
+            <select
+              id={`edit-defaultFeedingUnitId-${type.id}`}
+              name="defaultFeedingUnitId"
+              defaultValue={type.defaultFeedingUnitId ?? ""}
+              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+            >
+              <option value="">Select unit</option>
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name} {unit.abbreviation ? `(${unit.abbreviation})` : ""}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2 justify-end">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

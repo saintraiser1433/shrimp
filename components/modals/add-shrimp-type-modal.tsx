@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createShrimpType } from "@/lib/actions/shrimp-types";
 
-export function AddShrimpTypeModal() {
+type ShrimpUnit = { id: string; name: string; abbreviation: string | null };
+
+export function AddShrimpTypeModal({ units }: { units: ShrimpUnit[] }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -51,6 +53,34 @@ export function AddShrimpTypeModal() {
           <div>
             <Label htmlFor="description">Description</Label>
             <Input id="description" name="description" />
+          </div>
+          <div>
+            <Label htmlFor="defaultFeedingIntervalDays">Default feeding interval (days)</Label>
+            <Input
+              id="defaultFeedingIntervalDays"
+              name="defaultFeedingIntervalDays"
+              type="number"
+              min="1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="defaultFeedingQty">Default feeding quantity</Label>
+            <Input id="defaultFeedingQty" name="defaultFeedingQty" type="number" step="0.01" />
+          </div>
+          <div>
+            <Label htmlFor="defaultFeedingUnitId">Default feeding unit</Label>
+            <select
+              id="defaultFeedingUnitId"
+              name="defaultFeedingUnitId"
+              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+            >
+              <option value="">Select unit</option>
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name} {unit.abbreviation ? `(${unit.abbreviation})` : ""}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2 justify-end">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

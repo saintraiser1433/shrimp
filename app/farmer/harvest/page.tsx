@@ -51,6 +51,8 @@ export default async function FarmerHarvestPage({
             id: s.id,
             pond: { name: s.pond.name },
             scheduledAt: s.scheduledAt,
+            estimatedQty: s.estimatedQty.toString(),
+            unitLabel: s.unit.abbreviation || s.unit.name,
           }))}
         />
       </div>
@@ -104,13 +106,14 @@ export default async function FarmerHarvestPage({
                 <tr className="border-b">
                   <th className="pb-2 font-medium">Pond</th>
                   <th className="pb-2 font-medium">Quantity</th>
+                  <th className="pb-2 font-medium">Unit</th>
                   <th className="pb-2 font-medium">Date</th>
                 </tr>
               </thead>
               <tbody>
                 {recentHarvests.length === 0 ? (
                   <tr>
-                    <td colSpan={3}>
+                    <td colSpan={4}>
                       <DataTableEmpty message="No harvests declared yet." />
                     </td>
                   </tr>
@@ -118,9 +121,8 @@ export default async function FarmerHarvestPage({
                   recentHarvests.map((h) => (
                     <tr key={h.id} className="border-b">
                       <td className="py-2">{h.pond.name}</td>
-                      <td className="py-2">
-                        {h.actualQty.toString()} {h.unit.abbreviation || h.unit.name}
-                      </td>
+                      <td className="py-2">{h.actualQty.toString()}</td>
+                      <td className="py-2">{h.unit.abbreviation || h.unit.name}</td>
                       <td className="py-2 text-muted-foreground">
                         {new Date(h.harvestedAt).toLocaleString()}
                       </td>

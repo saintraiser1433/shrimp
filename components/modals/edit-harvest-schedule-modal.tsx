@@ -12,26 +12,33 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { createHarvestSchedule } from "@/lib/actions/harvest";
+import { updateHarvestSchedule } from "@/lib/actions/harvest";
 
-function getMinDatetimeLocal(): string {
-  const now = new Date();
+function formatDatetimeLocal(isoOrDate: string | Date): string {
+  const d = new Date(isoOrDate);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-type Pond = { id: string; name: string };
+type ScheduleRow = {
+  id: string;
+  shrimpTypeId: string | null;
+  scheduledAt: string;
+  estimatedQty: string;
+  unitId: string;
+  farmerId: string | null;
+};
 type Unit = { id: string; name: string; abbreviation: string | null };
 type Farmer = { id: string; name: string | null; email: string };
 type ShrimpType = { id: string; name: string };
 
-export function CreateHarvestScheduleModal({
-  ponds,
+export function EditHarvestScheduleModal({
+  schedule,
   units,
   farmers,
   shrimpTypes,
 }: {
-  ponds: Pond[];
+  schedule: ScheduleRow;
   units: Unit[];
   farmers: Farmer[];
   shrimpTypes: ShrimpType[];
@@ -46,13 +53,12 @@ export function CreateHarvestScheduleModal({
     const formData = new FormData(form);
     startTransition(async () => {
       try {
-        await createHarvestSchedule(formData);
-        toast.success("Harvest schedule created");
+        await updateHarvestSchedule(schedule.id, formData);
+        toast.success("Harvest schedule updated");
         setOpen(false);
-        form.reset();
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to create schedule");
+        toast.error(err instanceof Error ? err.message : "Failed to update schedule");
       }
     });
   }
@@ -60,34 +66,21 @@ export function CreateHarvestScheduleModal({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Create schedule</Button>
+        <Button type="button" size="sm" variant="outline">
+          Edit
+        </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Set harvest schedule for pond</DialogTitle>
+          <DialogTitle>Edit harvest schedule</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <Label htmlFor="pondId">Pond</Label>
+            <Label htmlFor={`edit-harvest-shrimpTypeId-${schedule.id}`}>Shrimp type</Label>
             <select
-              id="pondId"
-              name="pondId"
-              required
-              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
-            >
-              <option value="">Select pond</option>
-              {ponds.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="shrimpTypeId">Shrimp type</Label>
-            <select
-              id="shrimpTypeId"
+              id={`edit-harvest-shrimpTypeId-${schedule.id}`}
               name="shrimpTypeId"
+              defaultValue={schedule.shrimpTypeId ?? ""}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
               <option value="">Select shrimp type</option>
@@ -99,64 +92,67 @@ export function CreateHarvestScheduleModal({
             </select>
           </div>
           <div>
-            <Label htmlFor="scheduledAt">Scheduled at</Label>
+            <Label htmlFor={`edit-harvest-scheduledAt-${schedule.id}`}>Scheduled at</Label>
             <input
-              id="scheduledAt"
+              id={`edit-harvest-scheduledAt-${schedule.id}`}
               name="scheduledAt"
               type="datetime-local"
               required
-              min={getMinDatetimeLocal()}
+              defaultValue={formatDatetimeLocal(schedule.scheduledAt)}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             />
           </div>
           <div>
-            <Label htmlFor="estimatedQty">Estimated quantity</Label>
+            <Label htmlFor={`edit-harvest-estimatedQty-${schedule.id}`}>Estimated quantity</Label>
             <input
-              id="estimatedQty"
+              id={`edit-harvest-estimatedQty-${schedule.id}`}
               name="estimatedQty"
               type="number"
               step="0.01"
-              required
               min="0"
+              required
+              defaultValue={schedule.estimatedQty}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             />
           </div>
           <div>
-            <Label htmlFor="unitId">Unit</Label>
+            <Label htmlFor={`edit-harvest-unitId-${schedule.id}`}>Unit</Label>
             <select
-              id="unitId"
+              id={`edit-harvest-unitId-${schedule.id}`}
               name="unitId"
+              defaultValue={schedule.unitId}
               required
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} {u.abbreviation ? `(${u.abbreviation})` : ""}
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name} {unit.abbreviation ? `(${unit.abbreviation})` : ""}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <Label htmlFor="farmerId">Assign to farmer (optional)</Label>
+            <Label htmlFor={`edit-harvest-farmerId-${schedule.id}`}>Assign to farmer</Label>
             <select
-              id="farmerId"
+              id={`edit-harvest-farmerId-${schedule.id}`}
               name="farmerId"
+              defaultValue={schedule.farmerId ?? ""}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
               <option value="">Any</option>
-              {farmers.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name || f.email}
+              {farmers.map((farmer) => (
+                <option key={farmer.id} value={farmer.id}>
+                  {farmer.name || farmer.email}
                 </option>
               ))}
             </select>
           </div>
-          <div className="flex gap-2 justify-end">
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Creating…" : "Create schedule"}
+              {isPending ? "Saving…" : "Save"}
             </Button>
           </div>
         </form>

@@ -16,7 +16,13 @@ import { declareHarvest } from "@/lib/actions/harvest-declare";
 
 type Pond = { id: string; name: string };
 type Unit = { id: string; name: string; abbreviation: string | null };
-type Schedule = { id: string; pond: { name: string }; scheduledAt: Date };
+type Schedule = {
+  id: string;
+  pond: { name: string };
+  scheduledAt: Date;
+  estimatedQty: string;
+  unitLabel: string;
+};
 
 export function DeclareHarvestModal({
   ponds,
@@ -29,6 +35,11 @@ export function DeclareHarvestModal({
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [selectedUnitId, setSelectedUnitId] = useState(units[0]?.id ?? "");
+  const [selectedScheduleId, setSelectedScheduleId] = useState("");
+
+  const selectedUnit = units.find((unit) => unit.id === selectedUnitId) ?? null;
+  const selectedSchedule = schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -40,6 +51,8 @@ export function DeclareHarvestModal({
         toast.success("Harvest declared");
         setOpen(false);
         form.reset();
+        setSelectedScheduleId("");
+        setSelectedUnitId(units[0]?.id ?? "");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to declare harvest");
       }
@@ -79,6 +92,14 @@ export function DeclareHarvestModal({
           <div>
             <Label htmlFor="actualQty">Actual quantity</Label>
             <Input id="actualQty" name="actualQty" type="number" step="0.01" required />
+            <p className="text-muted-foreground mt-1 text-xs">
+              Unit: {selectedUnit?.abbreviation || selectedUnit?.name || "Select a unit"}
+            </p>
+            {selectedSchedule ? (
+              <p className="text-muted-foreground mt-1 text-xs">
+                Scheduled estimate: {selectedSchedule.estimatedQty} {selectedSchedule.unitLabel}
+              </p>
+            ) : null}
           </div>
           <div>
             <Label htmlFor="unitId">Unit</Label>
@@ -86,11 +107,13 @@ export function DeclareHarvestModal({
               id="unitId"
               name="unitId"
               required
+              value={selectedUnitId}
+              onChange={(e) => setSelectedUnitId(e.target.value)}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
               {units.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.name}
+                  {u.name} {u.abbreviation ? `(${u.abbreviation})` : ""}
                 </option>
               ))}
             </select>
@@ -101,12 +124,14 @@ export function DeclareHarvestModal({
               id="scheduleId"
               name="scheduleId"
               required
+              value={selectedScheduleId}
+              onChange={(e) => setSelectedScheduleId(e.target.value)}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
               <option value="">Select a schedule</option>
               {schedules.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.pond.name} – {new Date(s.scheduledAt).toLocaleDateString()}
+                  {s.pond.name} - {new Date(s.scheduledAt).toLocaleDateString()}
                 </option>
               ))}
             </select>

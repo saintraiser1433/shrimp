@@ -87,6 +87,19 @@ export function CreateShrimpInventoryModal({
             <Label htmlFor="quantity">Quantity</Label>
             <Input id="quantity" name="quantity" type="number" step="0.01" required />
           </div>
+          <div>
+            <Label htmlFor="status">Status</Label>
+            <select
+              id="status"
+              name="status"
+              defaultValue="AVAILABLE"
+              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+            >
+              <option value="AVAILABLE">Available</option>
+              <option value="IN_POND">In Pond</option>
+              <option value="HARVESTED">Harvested</option>
+            </select>
+          </div>
           <div className="flex gap-2 justify-end">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel

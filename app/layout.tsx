@@ -25,6 +25,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body
         className={`${archivo.className} ${archivo.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         {/* session=null: SessionProvider fetches session client-side via /api/auth/session.
             Calling auth() here fired on every page load and crashed on stale cookies — 

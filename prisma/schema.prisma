@@ -1,4 +1,5 @@
 // Prisma schema for Panso Nestor Sherald Shrimp Farming Management System
+// NOTE: Never abbreviate "Panso Nestor Sherald" as "PNS".
 // NextAuth v5 + PostgreSQL
 
 generator client {
@@ -103,11 +104,17 @@ model WaterMaintenanceSchedule {
 }
 
 model ShrimpType {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
+  id                         String   @id @default(cuid())
+  name                       String
+  description                String?
+  defaultFeedingIntervalDays Int?
+  defaultFeedingQty          Decimal? @db.Decimal(12, 2)
+  defaultFeedingUnitId       String?
 
-  shrimpInventories ShrimpInventory[]
+  defaultFeedingUnit ShrimpUnit?       @relation("ShrimpTypeDefaultFeedingUnit", fields: [defaultFeedingUnitId], references: [id], onDelete: SetNull)
+  shrimpInventories  ShrimpInventory[]
+  feedingSchedules   FeedingSchedule[]
+  harvestSchedules   HarvestSchedule[]
 }
 
 model ShrimpUnit {
@@ -115,10 +122,11 @@ model ShrimpUnit {
   name         String   // e.g. KILO, GRAM
   abbreviation String?
 
-  shrimpInventories ShrimpInventory[]
-  feedsInventories  FeedsInventory[]
-  harvestSchedules  HarvestSchedule[]
-  harvests          Harvest[]
+  defaultFeedingShrimpTypes ShrimpType[] @relation("ShrimpTypeDefaultFeedingUnit")
+  shrimpInventories         ShrimpInventory[]
+  feedsInventories          FeedsInventory[]
+  harvestSchedules          HarvestSchedule[]
+  harvests                  Harvest[]
 }
 
 model ShrimpInventory {
@@ -126,6 +134,7 @@ model ShrimpInventory {
   shrimpTypeId String
   unitId       String
   quantity     Decimal  @db.Decimal(12, 2)
+  status       String   @default("AVAILABLE") // AVAILABLE, IN_POND, HARVESTED
   userId       String   // farmer who created/owns this entry
   createdAt    DateTime @default(now())
 
@@ -161,6 +170,7 @@ model FeedingSchedule {
   id                 String   @id @default(cuid())
   pondId             String
   feedId             String
+  shrimpTypeId       String?
   scheduledAt        DateTime
   quantity           Decimal  @db.Decimal(12, 2)
   status             String   @default("PENDING") // PENDING, COMPLETED, MISSED
@@ -168,6 +178,7 @@ model FeedingSchedule {
 
   pond             Pond                  @relation(fields: [pondId], references: [id], onDelete: Cascade)
   feed             FeedsInventory         @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  shrimpType       ShrimpType?            @relation(fields: [shrimpTypeId], references: [id], onDelete: SetNull)
   assignedFarmer   User?                  @relation("AssignedFarmer", fields: [assignedFarmerId], references: [id], onDelete: SetNull)
   confirmations    FeedingConfirmation[]
 }
@@ -187,16 +198,18 @@ model FeedingConfirmation {
 model HarvestSchedule {
   id           String   @id @default(cuid())
   pondId       String
+  shrimpTypeId String?
   scheduledAt  DateTime
   estimatedQty Decimal  @db.Decimal(12, 2)
   unitId       String
   farmerId     String?
   status       String   @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
 
-  pond   Pond       @relation(fields: [pondId], references: [id], onDelete: Cascade)
-  unit   ShrimpUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  farmer User?      @relation(fields: [farmerId], references: [id], onDelete: SetNull)
-  harvests Harvest[]
+  pond       Pond        @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  shrimpType ShrimpType? @relation(fields: [shrimpTypeId], references: [id], onDelete: SetNull)
+  unit       ShrimpUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  farmer     User?       @relation(fields: [farmerId], references: [id], onDelete: SetNull)
+  harvests   Harvest[]
 }
 
 model Harvest {

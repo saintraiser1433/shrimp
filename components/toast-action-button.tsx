@@ -16,11 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-type ToastActionButtonProps = {
-  /** Server action reference (pass the function, not a wrapper). */
-  action: (...args: unknown[]) => Promise<void>;
-  /** Optional argument to pass to action (e.g. id). Enables passing server actions from Server Components. */
-  actionArg?: unknown;
+type ToastActionButtonBaseProps = {
   successMessage: string;
   errorMessage?: string;
   variant?: React.ComponentProps<typeof Button>["variant"];
@@ -32,7 +28,20 @@ type ToastActionButtonProps = {
   confirmDescription?: string;
 };
 
-export function ToastActionButton({
+type ToastActionButtonPropsWithoutArg = ToastActionButtonBaseProps & {
+  /** Server action reference (pass the function, not a wrapper). */
+  action: () => Promise<void>;
+  actionArg?: undefined;
+};
+
+type ToastActionButtonPropsWithArg<TArg> = ToastActionButtonBaseProps & {
+  /** Server action reference (pass the function, not a wrapper). */
+  action: (arg: TArg) => Promise<void>;
+  /** Optional argument to pass to action (e.g. id). Enables passing server actions from Server Components. */
+  actionArg: TArg;
+};
+
+export function ToastActionButton<TArg>({
   action,
   actionArg,
   successMessage,
@@ -43,7 +52,7 @@ export function ToastActionButton({
   className,
   confirmTitle,
   confirmDescription,
-}: ToastActionButtonProps) {
+}: ToastActionButtonPropsWithoutArg | ToastActionButtonPropsWithArg<TArg>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -52,7 +61,7 @@ export function ToastActionButton({
     startTransition(async () => {
       try {
         if (actionArg !== undefined) {
-          await action(actionArg);
+          await (action as (arg: TArg) => Promise<void>)(actionArg as TArg);
         } else {
           await (action as () => Promise<void>)();
         }

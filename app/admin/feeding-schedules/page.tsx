@@ -12,6 +12,10 @@ import { markMissedFeedingsAndNotify } from "@/lib/notifications";
 
 const DEFAULT_PAGE_SIZE = 10;
 
+function formatFeedTotal(value: number) {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+}
+
 export default async function AdminFeedingSchedulesPage({
   searchParams,
 }: {
@@ -27,9 +31,14 @@ export default async function AdminFeedingSchedulesPage({
   const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
   const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
 
-  const [schedules, totalCount, ponds, feeds, farmers] = await Promise.all([
+  const [schedules, totalCount, ponds, feeds, farmers, shrimpTypes, summarySchedules] = await Promise.all([
     prisma.feedingSchedule.findMany({
-      include: { pond: true, feed: true, assignedFarmer: true },
+      include: {
+        pond: true,
+        feed: true,
+        shrimpType: { include: { defaultFeedingUnit: true } },
+        assignedFarmer: true,
+      },
       orderBy: { scheduledAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -38,7 +47,63 @@ export default async function AdminFeedingSchedulesPage({
     prisma.pond.findMany({ orderBy: { name: "asc" } }),
     prisma.feedsInventory.findMany({ include: { unit: true }, orderBy: { name: "asc" } }),
     prisma.user.findMany({ where: { role: "FARMER" }, orderBy: { name: "asc" } }),
+    prisma.shrimpType.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.feedingSchedule.findMany({
+      include: {
+        pond: true,
+        shrimpType: true,
+        confirmations: {
+          select: {
+            confirmedAt: true,
+            dispensedQty: true,
+          },
+        },
+      },
+      orderBy: { scheduledAt: "desc" },
+    }),
   ]);
+
+  const feedingPondSummary = Array.from(
+    summarySchedules.reduce((map, schedule) => {
+      const existing = map.get(schedule.pondId) ?? {
+        pondId: schedule.pondId,
+        pondName: schedule.pond.name,
+        shrimpTypes: new Set<string>(),
+        pendingCount: 0,
+        totalFeedConsumed: 0,
+        lastFed: null as Date | null,
+      };
+
+      if (schedule.shrimpType?.name) {
+        existing.shrimpTypes.add(schedule.shrimpType.name);
+      }
+      if (schedule.status === "PENDING") {
+        existing.pendingCount += 1;
+      }
+      for (const confirmation of schedule.confirmations) {
+        existing.totalFeedConsumed += Number(confirmation.dispensedQty);
+        if (!existing.lastFed || confirmation.confirmedAt > existing.lastFed) {
+          existing.lastFed = confirmation.confirmedAt;
+        }
+      }
+
+      map.set(schedule.pondId, existing);
+      return map;
+    }, new Map<string, {
+      pondId: string;
+      pondName: string;
+      shrimpTypes: Set<string>;
+      pendingCount: number;
+      totalFeedConsumed: number;
+      lastFed: Date | null;
+    }>())
+  ).map(([, summary]) => ({
+    ...summary,
+    shrimpTypes: Array.from(summary.shrimpTypes),
+  }));
 
   return (
     <>
@@ -48,8 +113,52 @@ export default async function AdminFeedingSchedulesPage({
           ponds={ponds.map((p) => ({ id: p.id, name: p.name }))}
           feeds={feeds.map((f) => ({ id: f.id, name: f.name }))}
           farmers={farmers.map((u) => ({ id: u.id, name: u.name, email: u.email }))}
+          shrimpTypes={shrimpTypes}
         />
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Feeding Ponds Summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="pb-2 font-medium">Pond</th>
+                  <th className="pb-2 font-medium">Shrimp type(s)</th>
+                  <th className="pb-2 font-medium">Active / pending schedules</th>
+                  <th className="pb-2 font-medium">Total feed consumed</th>
+                  <th className="pb-2 font-medium">Last fed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feedingPondSummary.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>
+                      <DataTableEmpty message="No feeding ponds with schedules yet." />
+                    </td>
+                  </tr>
+                ) : (
+                  feedingPondSummary.map((summary) => (
+                    <tr key={summary.pondId} className="border-b">
+                      <td className="py-2 font-medium">{summary.pondName}</td>
+                      <td className="py-2">
+                        {summary.shrimpTypes.length > 0 ? summary.shrimpTypes.join(", ") : "—"}
+                      </td>
+                      <td className="py-2">{summary.pendingCount}</td>
+                      <td className="py-2">{formatFeedTotal(summary.totalFeedConsumed)}</td>
+                      <td className="py-2 text-muted-foreground">
+                        {summary.lastFed ? new Date(summary.lastFed).toLocaleString() : "—"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Schedules</CardTitle>
@@ -60,6 +169,7 @@ export default async function AdminFeedingSchedulesPage({
               <thead>
                 <tr className="border-b">
                   <th className="pb-2 font-medium">Pond</th>
+                  <th className="pb-2 font-medium">Shrimp type</th>
                   <th className="pb-2 font-medium">Feed</th>
                   <th className="pb-2 font-medium">Scheduled at</th>
                   <th className="pb-2 font-medium">Quantity</th>
@@ -71,7 +181,7 @@ export default async function AdminFeedingSchedulesPage({
               <tbody>
                 {schedules.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <DataTableEmpty message="No feeding schedules yet." />
                     </td>
                   </tr>
@@ -79,6 +189,7 @@ export default async function AdminFeedingSchedulesPage({
                   schedules.map((s) => (
                     <tr key={s.id} className="border-b">
                       <td className="py-2">{s.pond.name}</td>
+                      <td className="py-2">{s.shrimpType?.name || "—"}</td>
                       <td className="py-2">{s.feed.name}</td>
                       <td className="py-2">{new Date(s.scheduledAt).toLocaleString()}</td>
                       <td className="py-2">{s.quantity.toString()}</td>
@@ -94,8 +205,14 @@ export default async function AdminFeedingSchedulesPage({
                               scheduledAt: new Date(s.scheduledAt).toISOString(),
                               quantity: s.quantity.toString(),
                               assignedFarmerId: s.assignedFarmerId,
+                              shrimpTypeId: s.shrimpTypeId,
+                              shrimpTypeDefaultUnitLabel:
+                                s.shrimpType?.defaultFeedingUnit?.abbreviation ||
+                                s.shrimpType?.defaultFeedingUnit?.name ||
+                                null,
                             }}
                             farmers={farmers.map((u) => ({ id: u.id, name: u.name, email: u.email }))}
+                            shrimpTypes={shrimpTypes}
                           />
                           <ToastActionButton
                             action={deleteFeedingSchedule}
