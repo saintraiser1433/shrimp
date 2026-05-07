@@ -21,19 +21,28 @@ export default async function FarmerDashboardPage() {
   sixMonthsAgo.setDate(1);
   sixMonthsAgo.setHours(0, 0, 0, 0);
 
+  const farmerId = session.user.id;
+
   const [todaysFeedings, alarmFeedings, myHarvests, myInventory] = await Promise.all([
     prisma.feedingSchedule.findMany({
       where: {
+        assignedFarmerId: farmerId,
         scheduledAt: { gte: todayStart, lt: todayEnd },
-        status: "PENDING",
+        status: { in: ["PENDING", "DELAYED", "MISSED", "COMPLETED"] },
       },
       include: { pond: true, feed: true },
       orderBy: { scheduledAt: "asc" },
     }),
     prisma.feedingSchedule.findMany({
       where: {
-        status: "PENDING",
-        scheduledAt: { gte: new Date(now.getTime() - 15 * 60 * 1000), lte: alarmWindowEnd },
+        assignedFarmerId: farmerId,
+        OR: [
+          {
+            status: "PENDING",
+            scheduledAt: { gte: new Date(now.getTime() - 15 * 60 * 1000), lte: alarmWindowEnd },
+          },
+          { status: "DELAYED" },
+        ],
       },
       include: { pond: true, feed: true },
       orderBy: { scheduledAt: "asc" },
@@ -86,7 +95,7 @@ export default async function FarmerDashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="mb-2 text-sm">
-              {alarmFeedings.length} feeding(s) due in the next 30 minutes:
+              {alarmFeedings.length} feeding(s) due soon or delayed:
             </p>
             <ul className="mb-4 space-y-1 text-sm">
               {alarmFeedings.map((s) => (
@@ -113,11 +122,12 @@ export default async function FarmerDashboardPage() {
             ) : (
               <ul className="space-y-2">
                 {todaysFeedings.map((s) => (
-                  <li key={s.id} className="flex justify-between text-sm">
+                  <li key={s.id} className="flex justify-between gap-2 text-sm">
                     <span>
                       {s.pond.name} – {s.feed.name}
                     </span>
-                    <span className="text-muted-foreground">
+                    <span className="text-muted-foreground shrink-0 text-right">
+                      <span className="mr-2">{s.status}</span>
                       {new Date(s.scheduledAt).toLocaleTimeString()}
                     </span>
                   </li>

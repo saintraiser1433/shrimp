@@ -23,10 +23,13 @@ export default async function AdminDashboardPage() {
     harvestsWithPond,
     feedingByStatus,
     harvestsLast6Months,
+    activeStockingsForHarvestReadiness,
   ] = await Promise.all([
     prisma.pond.count(),
     prisma.feedsInventory.count(),
-    prisma.feedingSchedule.count({ where: { status: "PENDING" } }),
+    prisma.feedingSchedule.count({
+      where: { status: { in: ["PENDING", "DELAYED"] } },
+    }),
     prisma.harvest.count(),
     prisma.harvest.findMany({
       include: { pond: true },
@@ -41,7 +44,47 @@ export default async function AdminDashboardPage() {
       where: { harvestedAt: { gte: sixMonthsAgo } },
       select: { harvestedAt: true, actualQty: true },
     }),
+    prisma.pondStocking.findMany({
+      where: { status: "ACTIVE" },
+      select: {
+        stockedAt: true,
+        expectedHarvestDate: true,
+        shrimpType: {
+          select: {
+            growthStages: { select: { endDayFromStocking: true } },
+          },
+        },
+      },
+    }),
   ]);
+
+  function startOfCalendarDay(date: Date): Date {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  const todayStartHarvest = startOfCalendarDay(new Date());
+  let readyForHarvestStockings = 0;
+  for (const s of activeStockingsForHarvestReadiness) {
+    const dayFromStocking =
+      Math.floor(
+        (todayStartHarvest.getTime() - startOfCalendarDay(s.stockedAt).getTime()) /
+          (24 * 60 * 60 * 1000),
+      ) + 1;
+    const lastStageEndDay = s.shrimpType.growthStages.reduce(
+      (max, st) => Math.max(max, st.endDayFromStocking),
+      0,
+    );
+    const readyByStage =
+      lastStageEndDay > 0 && dayFromStocking >= lastStageEndDay;
+    const readyByExpected =
+      s.expectedHarvestDate != null &&
+      startOfCalendarDay(s.expectedHarvestDate).getTime() <= todayStartHarvest.getTime();
+    if (readyByStage || readyByExpected) {
+      readyForHarvestStockings += 1;
+    }
+  }
 
   const harvestByPond = Object.entries(
     harvestsWithPond.reduce<Record<string, number>>((acc, h) => {
@@ -79,13 +122,14 @@ export default async function AdminDashboardPage() {
 
   const feedingStatusData = [
     { name: "Pending", value: feedingByStatus.find((s) => s.status === "PENDING")?._count.id ?? 0 },
+    { name: "Delayed", value: feedingByStatus.find((s) => s.status === "DELAYED")?._count.id ?? 0 },
     { name: "Completed", value: feedingByStatus.find((s) => s.status === "COMPLETED")?._count.id ?? 0 },
     { name: "Missed", value: feedingByStatus.find((s) => s.status === "MISSED")?._count.id ?? 0 },
   ];
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Ponds</CardTitle>
@@ -110,7 +154,7 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{scheduleCount}</div>
-            <p className="text-muted-foreground text-xs">Scheduled</p>
+            <p className="text-muted-foreground text-xs">Pending + delayed</p>
           </CardContent>
         </Card>
         <Card>
@@ -120,6 +164,15 @@ export default async function AdminDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{harvestCount}</div>
             <p className="text-muted-foreground text-xs">Total records</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Ready for harvest</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{readyForHarvestStockings}</div>
+            <p className="text-muted-foreground text-xs">Active stockings due</p>
           </CardContent>
         </Card>
       </div>

@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 
+/** Hours after scheduled time before a DELAYED feeding becomes MISSED (farmer can still complete within this window). */
+export const FEEDING_MISS_GRACE_HOURS = 24;
+
 export async function createNotificationForAdmins(
   type: string,
   message: string,
@@ -48,24 +51,40 @@ export async function checkLowStockAndNotify() {
 
 export async function markMissedFeedingsAndNotify() {
   const now = new Date();
-  const missed = await prisma.feedingSchedule.findMany({
-    where: { status: "PENDING", scheduledAt: { lt: now } },
+  const graceMs = FEEDING_MISS_GRACE_HOURS * 60 * 60 * 1000;
+  const missedCutoff = new Date(now.getTime() - graceMs);
+
+  await prisma.feedingSchedule.updateMany({
+    where: {
+      status: "PENDING",
+      scheduledAt: { lt: now },
+    },
+    data: { status: "DELAYED" },
   });
-  for (const s of missed) {
+
+  const newlyMissed = await prisma.feedingSchedule.findMany({
+    where: {
+      status: "DELAYED",
+      scheduledAt: { lt: missedCutoff },
+    },
+  });
+
+  for (const s of newlyMissed) {
     await prisma.feedingSchedule.update({
       where: { id: s.id },
       data: { status: "MISSED" },
     });
   }
-  if (missed.length > 0) {
+
+  if (newlyMissed.length > 0) {
     const pondNames = await prisma.pond.findMany({
-      where: { id: { in: missed.map((m) => m.pondId) } },
+      where: { id: { in: newlyMissed.map((m) => m.pondId) } },
       select: { name: true },
     });
     const names = pondNames.map((p) => p.name).join(", ");
     await createNotificationForAdmins(
       "MISSED_FEEDING",
-      `${missed.length} feeding(s) missed (ponds: ${names}).`
+      `${newlyMissed.length} feeding(s) marked missed after the delayed grace period (ponds: ${names}).`
     );
   }
 }

@@ -21,6 +21,9 @@ type ShrimpTypeRow = {
   defaultFeedingIntervalDays: number | null;
   defaultFeedingQty: string | null;
   defaultFeedingUnitId: string | null;
+  expectedHarvestDays: number | null;
+  expectedHarvestQty: string | null;
+  expectedHarvestUnitId: string | null;
 };
 type ShrimpUnit = { id: string; name: string; abbreviation: string | null };
 
@@ -80,8 +83,12 @@ export function EditShrimpTypeModal({
           </div>
           <div>
             <Label htmlFor={`edit-defaultFeedingIntervalDays-${type.id}`}>
-              Default feeding interval (days)
+              Default feed-day spacing (calendar days between feeding days)
             </Label>
+            <p className="text-muted-foreground mb-1 text-xs">
+              Sessions per day are configured per growth stage (max 3); this field is only calendar
+              spacing for defaults/manual schedules.
+            </p>
             <Input
               id={`edit-defaultFeedingIntervalDays-${type.id}`}
               name="defaultFeedingIntervalDays"
@@ -106,6 +113,44 @@ export function EditShrimpTypeModal({
               id={`edit-defaultFeedingUnitId-${type.id}`}
               name="defaultFeedingUnitId"
               defaultValue={type.defaultFeedingUnitId ?? ""}
+              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+            >
+              <option value="">Select unit</option>
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name} {unit.abbreviation ? `(${unit.abbreviation})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor={`edit-expectedHarvestDays-${type.id}`}>
+              Expected harvest after (days from stocking)
+            </Label>
+            <Input
+              id={`edit-expectedHarvestDays-${type.id}`}
+              name="expectedHarvestDays"
+              type="number"
+              min="1"
+              defaultValue={type.expectedHarvestDays ?? ""}
+            />
+          </div>
+          <div>
+            <Label htmlFor={`edit-expectedHarvestQty-${type.id}`}>Expected harvest quantity</Label>
+            <Input
+              id={`edit-expectedHarvestQty-${type.id}`}
+              name="expectedHarvestQty"
+              type="number"
+              step="0.01"
+              defaultValue={type.expectedHarvestQty ?? ""}
+            />
+          </div>
+          <div>
+            <Label htmlFor={`edit-expectedHarvestUnitId-${type.id}`}>Expected harvest unit</Label>
+            <select
+              id={`edit-expectedHarvestUnitId-${type.id}`}
+              name="expectedHarvestUnitId"
+              defaultValue={type.expectedHarvestUnitId ?? ""}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
               <option value="">Select unit</option>

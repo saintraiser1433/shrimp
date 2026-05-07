@@ -24,7 +24,8 @@ export default async function AdminHarvestSchedulesPage({
   const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
   const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
 
-  const [schedules, totalCount, ponds, units, farmers, shrimpTypes] = await Promise.all([
+  const [schedules, totalCount, ponds, units, farmers, shrimpTypes, scheduledHarvestPondRows] =
+    await Promise.all([
     prisma.harvestSchedule.findMany({
       include: { pond: true, shrimpType: true, unit: true, farmer: true },
       orderBy: { scheduledAt: "desc" },
@@ -36,14 +37,21 @@ export default async function AdminHarvestSchedulesPage({
     prisma.shrimpUnit.findMany({ orderBy: { name: "asc" } }),
     prisma.user.findMany({ where: { role: "FARMER" }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
     prisma.shrimpType.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.harvestSchedule.findMany({
+      where: { status: "SCHEDULED" },
+      select: { pondId: true },
+    }),
   ]);
+
+  const pondsWithScheduledHarvest = new Set(scheduledHarvestPondRows.map((r) => r.pondId));
+  const pondsEligibleForNewSchedule = ponds.filter((p) => !pondsWithScheduledHarvest.has(p.id));
 
   return (
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Harvest Schedules</h1>
         <CreateHarvestScheduleModal
-          ponds={ponds.map((p) => ({ id: p.id, name: p.name }))}
+          ponds={pondsEligibleForNewSchedule.map((p) => ({ id: p.id, name: p.name }))}
           units={units.map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation }))}
           farmers={farmers.map((f) => ({ id: f.id, name: f.name, email: f.email }))}
           shrimpTypes={shrimpTypes}

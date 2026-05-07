@@ -11,9 +11,14 @@ import { confirmFeeding } from "@/lib/actions/feeding-confirm";
 type ConfirmFeedingFormProps = {
   scheduleId: string;
   defaultQuantity: string;
+  isLate?: boolean;
 };
 
-export function ConfirmFeedingForm({ scheduleId, defaultQuantity }: ConfirmFeedingFormProps) {
+export function ConfirmFeedingForm({
+  scheduleId,
+  defaultQuantity,
+  isLate = false,
+}: ConfirmFeedingFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -24,7 +29,7 @@ export function ConfirmFeedingForm({ scheduleId, defaultQuantity }: ConfirmFeedi
     startTransition(async () => {
       try {
         await confirmFeeding(formData);
-        toast.success("Feeding confirmed");
+        toast.success(isLate ? "Late feeding recorded" : "Feeding confirmed");
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to confirm feeding");
@@ -53,10 +58,29 @@ export function ConfirmFeedingForm({ scheduleId, defaultQuantity }: ConfirmFeedi
         <Label htmlFor={`notes-${scheduleId}`} className="sr-only">
           Notes
         </Label>
-        <Input id={`notes-${scheduleId}`} name="notes" className="h-8 w-32" placeholder="Notes" />
+        <Input
+          id={`notes-${scheduleId}`}
+          name="notes"
+          className="h-8 w-32"
+          placeholder="Notes"
+        />
       </div>
-      <Button type="submit" size="sm" disabled={isPending}>
-        {isPending ? "…" : "Confirm"}
+      {isLate ? (
+        <div>
+          <Label htmlFor={`lateReason-${scheduleId}`} className="sr-only">
+            Late reason
+          </Label>
+          <Input
+            id={`lateReason-${scheduleId}`}
+            name="lateReason"
+            className="h-8 w-40"
+            placeholder="Reason for late feeding"
+            required
+          />
+        </div>
+      ) : null}
+      <Button type="submit" size="sm" variant={isLate ? "secondary" : "default"} disabled={isPending}>
+        {isPending ? "…" : isLate ? "Mark as fed (late)" : "Confirm"}
       </Button>
     </form>
   );

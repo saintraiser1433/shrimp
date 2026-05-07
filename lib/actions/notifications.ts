@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAuth } from "@/lib/auth";
 
 export async function markNotificationRead(id: string) {
   await requireAdmin();
@@ -29,4 +29,24 @@ export async function markAllNotificationsReadForSession() {
     data: { read: true },
   });
   revalidatePath("/admin/notifications");
+}
+
+export async function markMyNotificationRead(id: string) {
+  const session = await requireAuth();
+  await prisma.notification.updateMany({
+    where: { id, userId: session.user.id },
+    data: { read: true },
+  });
+  revalidatePath("/admin/notifications");
+  revalidatePath("/farmer/notifications");
+}
+
+export async function markAllMyNotificationsRead() {
+  const session = await requireAuth();
+  await prisma.notification.updateMany({
+    where: { userId: session.user.id },
+    data: { read: true },
+  });
+  revalidatePath("/admin/notifications");
+  revalidatePath("/farmer/notifications");
 }

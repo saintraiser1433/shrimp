@@ -55,7 +55,13 @@ export function AddShrimpTypeModal({ units }: { units: ShrimpUnit[] }) {
             <Input id="description" name="description" />
           </div>
           <div>
-            <Label htmlFor="defaultFeedingIntervalDays">Default feeding interval (days)</Label>
+            <Label htmlFor="defaultFeedingIntervalDays">
+              Default feed-day spacing (calendar days between feeding days)
+            </Label>
+            <p className="text-muted-foreground mb-1 text-xs">
+              How often this type is fed when using legacy/manual spacing—not the same as sessions per
+              day on growth stages (set under Growth stages, max 3).
+            </p>
             <Input
               id="defaultFeedingIntervalDays"
               name="defaultFeedingIntervalDays"
@@ -72,6 +78,29 @@ export function AddShrimpTypeModal({ units }: { units: ShrimpUnit[] }) {
             <select
               id="defaultFeedingUnitId"
               name="defaultFeedingUnitId"
+              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+            >
+              <option value="">Select unit</option>
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name} {unit.abbreviation ? `(${unit.abbreviation})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="expectedHarvestDays">Expected harvest after (days from stocking)</Label>
+            <Input id="expectedHarvestDays" name="expectedHarvestDays" type="number" min="1" />
+          </div>
+          <div>
+            <Label htmlFor="expectedHarvestQty">Expected harvest quantity</Label>
+            <Input id="expectedHarvestQty" name="expectedHarvestQty" type="number" step="0.01" />
+          </div>
+          <div>
+            <Label htmlFor="expectedHarvestUnitId">Expected harvest unit</Label>
+            <select
+              id="expectedHarvestUnitId"
+              name="expectedHarvestUnitId"
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             >
               <option value="">Select unit</option>

@@ -17,6 +17,8 @@ import {
   CalendarCheck,
   Users,
   Settings,
+  Layers,
+  FileText,
 } from "lucide-react"
 
 import {
@@ -51,6 +53,8 @@ const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   CalendarCheck,
   Users,
   Settings,
+  Layers,
+  FileText,
 }
 
 export type NavMainItem = {

@@ -20,13 +20,71 @@ function formatScheduleDate(d: Date): string {
 export async function createHarvestSchedule(formData: FormData) {
   await requireAdmin();
   const pondId = formData.get("pondId") as string;
-  const shrimpTypeId = (formData.get("shrimpTypeId") as string) || null;
-  const scheduledAt = new Date(formData.get("scheduledAt") as string);
-  const estimatedQty = Number(formData.get("estimatedQty"));
-  const unitId = formData.get("unitId") as string;
+  let shrimpTypeId = (formData.get("shrimpTypeId") as string) || null;
+  const scheduledAtRaw = formData.get("scheduledAt") as string;
+  const estimatedQtyRaw = formData.get("estimatedQty") as string;
+  const unitIdRaw = formData.get("unitId") as string;
   const farmerId = (formData.get("farmerId") as string) || null;
+
+  // Auto-fill from active PondStocking (if any) when fields are missing
+  const activeStocking = await prisma.pondStocking.findFirst({
+    where: { pondId, status: "ACTIVE" },
+    orderBy: { stockedAt: "desc" },
+    include: {
+      shrimpType: { select: { expectedHarvestUnitId: true } },
+    },
+  });
+
+  let scheduledAt: Date;
+  if (scheduledAtRaw) {
+    scheduledAt = new Date(scheduledAtRaw);
+  } else if (activeStocking?.expectedHarvestDate) {
+    scheduledAt = new Date(activeStocking.expectedHarvestDate);
+  } else {
+    throw new Error("Scheduled date is required.");
+  }
+
+  let estimatedQty: number;
+  if (estimatedQtyRaw && estimatedQtyRaw.trim() !== "") {
+    estimatedQty = Number(estimatedQtyRaw);
+  } else if (activeStocking?.expectedHarvestQty) {
+    estimatedQty = Number(activeStocking.expectedHarvestQty);
+  } else {
+    throw new Error("Estimated quantity is required.");
+  }
+
+  let unitId = unitIdRaw;
+  if (!unitId && activeStocking?.shrimpType?.expectedHarvestUnitId) {
+    unitId = activeStocking.shrimpType.expectedHarvestUnitId;
+  }
+  if (!unitId) {
+    throw new Error("Unit is required.");
+  }
+
+  if (!shrimpTypeId && activeStocking) {
+    shrimpTypeId = activeStocking.shrimpTypeId;
+  }
+
+  const blockingSchedule = await prisma.harvestSchedule.findFirst({
+    where: { pondId, status: "SCHEDULED" },
+    select: { id: true },
+  });
+  if (blockingSchedule) {
+    throw new Error(
+      "This pond already has a scheduled harvest. Complete or cancel it before creating another.",
+    );
+  }
+
   await prisma.harvestSchedule.create({
-    data: { pondId, shrimpTypeId, scheduledAt, estimatedQty, unitId, farmerId },
+    data: {
+      pondId,
+      shrimpTypeId,
+      pondStockingId: activeStocking?.id ?? null,
+      scheduledAt,
+      estimatedQty,
+      unitId,
+      farmerId,
+    },
   });
 
   try {

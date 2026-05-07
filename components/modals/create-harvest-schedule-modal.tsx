@@ -69,19 +69,26 @@ export function CreateHarvestScheduleModal({
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <Label htmlFor="pondId">Pond</Label>
-            <select
-              id="pondId"
-              name="pondId"
-              required
-              className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
-            >
-              <option value="">Select pond</option>
-              {ponds.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            {ponds.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Every pond already has a scheduled harvest in progress. Complete or cancel an existing
+                schedule before adding another for that pond.
+              </p>
+            ) : (
+              <select
+                id="pondId"
+                name="pondId"
+                required
+                className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+              >
+                <option value="">Select pond</option>
+                {ponds.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <Label htmlFor="shrimpTypeId">Shrimp type</Label>
@@ -155,7 +162,7 @@ export function CreateHarvestScheduleModal({
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || ponds.length === 0}>
               {isPending ? "Creating…" : "Create schedule"}
             </Button>
           </div>

@@ -7,6 +7,7 @@ import { DataTableEmpty } from "@/components/data-table-empty";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import { ToastActionButton } from "@/components/toast-action-button";
 import { CreateShrimpInventoryModal } from "@/components/modals/create-shrimp-inventory-modal";
+import { FarmerFeedingCalendarModal } from "@/components/modals/farmer-feeding-calendar-modal";
 import { deleteShrimpInventory } from "@/lib/actions/shrimp-inventory";
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -53,16 +54,82 @@ export default async function FarmerShrimpInventoryPage({
       take: pageSize,
     }),
     prisma.shrimpInventory.count({ where }),
-    prisma.shrimpType.findMany({ orderBy: { name: "asc" } }),
+    prisma.shrimpType.findMany({
+      orderBy: { name: "asc" },
+      include: {
+        defaultFeedingUnit: true,
+        expectedHarvestUnit: true,
+        growthStages: {
+          include: {
+            feed: { select: { id: true, name: true } },
+            feedUnit: { select: { id: true, name: true, abbreviation: true } },
+          },
+          orderBy: [{ sortOrder: "asc" }, { startDayFromStocking: "asc" }],
+        },
+      },
+    }),
     prisma.shrimpUnit.findMany({ orderBy: { name: "asc" } }),
   ]);
+
+  const relevantPondIds = Array.from(
+    new Set(
+      inventories.flatMap((inventory) =>
+        inventory.pondAssignments.map((assignment) => assignment.pondId),
+      ),
+    ),
+  );
+  const relevantShrimpTypeIds = Array.from(
+    new Set(inventories.map((inventory) => inventory.shrimpTypeId)),
+  );
+
+  const feedingCalendarSchedules =
+    relevantPondIds.length === 0 || relevantShrimpTypeIds.length === 0
+      ? []
+      : await prisma.feedingSchedule.findMany({
+          where: {
+            assignedFarmerId: session.user.id,
+            pondId: { in: relevantPondIds },
+            shrimpTypeId: { in: relevantShrimpTypeIds },
+          },
+          include: {
+            pond: { select: { id: true, name: true } },
+            feed: { select: { id: true, name: true } },
+            pondStocking: { select: { stockedAt: true } },
+          },
+          orderBy: { scheduledAt: "asc" },
+        });
 
   return (
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">My Shrimp Inventory</h1>
         <CreateShrimpInventoryModal
-          types={types.map((t) => ({ id: t.id, name: t.name }))}
+          types={types.map((t) => ({
+            id: t.id,
+            name: t.name,
+            defaultFeedingIntervalDays: t.defaultFeedingIntervalDays,
+            defaultFeedingQty: t.defaultFeedingQty?.toString() ?? null,
+            defaultFeedingUnitLabel: t.defaultFeedingUnit
+              ? t.defaultFeedingUnit.abbreviation || t.defaultFeedingUnit.name
+              : null,
+            expectedHarvestDays: t.expectedHarvestDays,
+            expectedHarvestQty: t.expectedHarvestQty?.toString() ?? null,
+            expectedHarvestUnitLabel: t.expectedHarvestUnit
+              ? t.expectedHarvestUnit.abbreviation || t.expectedHarvestUnit.name
+              : null,
+            growthStages: t.growthStages.map((stage) => ({
+              id: stage.id,
+              stageName: stage.stageName,
+              startDayFromStocking: stage.startDayFromStocking,
+              endDayFromStocking: stage.endDayFromStocking,
+              feedName: stage.feed?.name ?? null,
+              feedQtyPerSession: stage.feedQtyPerSession.toString(),
+              feedingSessionsPerDay: stage.feedingSessionsPerDay,
+              feedUnitLabel: stage.feedUnit
+                ? stage.feedUnit.abbreviation || stage.feedUnit.name
+                : null,
+            })),
+          }))}
           units={units.map((u) => ({ id: u.id, name: u.name }))}
         />
       </div>
@@ -107,6 +174,48 @@ export default async function FarmerShrimpInventoryPage({
                           : "—"}
                       </td>
                       <td className="py-2">
+                        <div className="flex items-center gap-2">
+                          <FarmerFeedingCalendarModal
+                            shrimpTypeName={i.shrimpType.name}
+                            stageDefinitions={
+                              types
+                                .find((type) => type.id === i.shrimpTypeId)
+                                ?.growthStages.map((stage) => ({
+                                  stageName: stage.stageName,
+                                  startDayFromStocking: stage.startDayFromStocking,
+                                  endDayFromStocking: stage.endDayFromStocking,
+                                })) ?? []
+                            }
+                            items={feedingCalendarSchedules
+                              .filter(
+                                (schedule) =>
+                                  schedule.shrimpTypeId === i.shrimpTypeId &&
+                                  i.pondAssignments.some(
+                                    (assignment) => assignment.pondId === schedule.pondId,
+                                  ),
+                              )
+                              .map((schedule) => ({
+                                id: schedule.id,
+                                pondName: schedule.pond.name,
+                                feedName: schedule.feed.name,
+                                growthStageName: schedule.growthStageName,
+                                scheduledAtIso: schedule.scheduledAt.toISOString(),
+                                quantity: schedule.quantity.toString(),
+                                status: schedule.status,
+                                dayFromStocking: schedule.pondStocking
+                                  ? Math.floor(
+                                      (new Date(schedule.scheduledAt).setHours(0, 0, 0, 0) -
+                                        new Date(schedule.pondStocking.stockedAt).setHours(
+                                          0,
+                                          0,
+                                          0,
+                                          0,
+                                        )) /
+                                        (24 * 60 * 60 * 1000),
+                                    ) + 1
+                                  : null,
+                              }))}
+                          />
                         <ToastActionButton
                           action={deleteShrimpInventory}
                           actionArg={i.id}
@@ -119,6 +228,7 @@ export default async function FarmerShrimpInventoryPage({
                         >
                           Delete
                         </ToastActionButton>
+                        </div>
                       </td>
                     </tr>
                   ))

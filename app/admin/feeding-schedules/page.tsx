@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { DataTableEmpty } from "@/components/data-table-empty";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import { ToastActionButton } from "@/components/toast-action-button";
@@ -9,6 +10,7 @@ import { CreateFeedingScheduleModal } from "@/components/modals/create-feeding-s
 import { EditFeedingScheduleModal } from "@/components/modals/edit-feeding-schedule-modal";
 import { deleteFeedingSchedule } from "@/lib/actions/feeding-schedules";
 import { markMissedFeedingsAndNotify } from "@/lib/notifications";
+import { refreshSchedulesForAllActiveStockings } from "@/lib/actions/pond-stockings";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -26,6 +28,7 @@ export default async function AdminFeedingSchedulesPage({
     redirect("/login");
 
   await markMissedFeedingsAndNotify();
+  await refreshSchedulesForAllActiveStockings();
 
   const params = await Promise.resolve(searchParams);
   const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
@@ -38,6 +41,16 @@ export default async function AdminFeedingSchedulesPage({
         feed: true,
         shrimpType: { include: { defaultFeedingUnit: true } },
         assignedFarmer: true,
+        confirmations: {
+          orderBy: { confirmedAt: "desc" },
+          select: {
+            isLate: true,
+            lateReason: true,
+            notes: true,
+            confirmedAt: true,
+            farmer: { select: { name: true, email: true } },
+          },
+        },
       },
       orderBy: { scheduledAt: "desc" },
       skip: (page - 1) * pageSize,
@@ -66,6 +79,10 @@ export default async function AdminFeedingSchedulesPage({
     }),
   ]);
 
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
   const feedingPondSummary = Array.from(
     summarySchedules.reduce((map, schedule) => {
       const existing = map.get(schedule.pondId) ?? {
@@ -75,18 +92,28 @@ export default async function AdminFeedingSchedulesPage({
         pendingCount: 0,
         totalFeedConsumed: 0,
         lastFed: null as Date | null,
+        todayTotal: 0,
+        todayCompleted: 0,
       };
 
       if (schedule.shrimpType?.name) {
         existing.shrimpTypes.add(schedule.shrimpType.name);
       }
-      if (schedule.status === "PENDING") {
+      if (schedule.status === "PENDING" || schedule.status === "DELAYED") {
         existing.pendingCount += 1;
       }
       for (const confirmation of schedule.confirmations) {
         existing.totalFeedConsumed += Number(confirmation.dispensedQty);
         if (!existing.lastFed || confirmation.confirmedAt > existing.lastFed) {
           existing.lastFed = confirmation.confirmedAt;
+        }
+      }
+
+      const schedAt = new Date(schedule.scheduledAt);
+      if (schedAt >= todayStart && schedAt < todayEnd) {
+        existing.todayTotal += 1;
+        if (schedule.status === "COMPLETED") {
+          existing.todayCompleted += 1;
         }
       }
 
@@ -99,6 +126,8 @@ export default async function AdminFeedingSchedulesPage({
       pendingCount: number;
       totalFeedConsumed: number;
       lastFed: Date | null;
+      todayTotal: number;
+      todayCompleted: number;
     }>())
   ).map(([, summary]) => ({
     ...summary,
@@ -128,6 +157,7 @@ export default async function AdminFeedingSchedulesPage({
                   <th className="pb-2 font-medium">Pond</th>
                   <th className="pb-2 font-medium">Shrimp type(s)</th>
                   <th className="pb-2 font-medium">Active / pending schedules</th>
+                  <th className="pb-2 font-medium">Today&apos;s feeding progress</th>
                   <th className="pb-2 font-medium">Total feed consumed</th>
                   <th className="pb-2 font-medium">Last fed</th>
                 </tr>
@@ -135,7 +165,7 @@ export default async function AdminFeedingSchedulesPage({
               <tbody>
                 {feedingPondSummary.length === 0 ? (
                   <tr>
-                    <td colSpan={5}>
+                    <td colSpan={6}>
                       <DataTableEmpty message="No feeding ponds with schedules yet." />
                     </td>
                   </tr>
@@ -147,6 +177,11 @@ export default async function AdminFeedingSchedulesPage({
                         {summary.shrimpTypes.length > 0 ? summary.shrimpTypes.join(", ") : "—"}
                       </td>
                       <td className="py-2">{summary.pendingCount}</td>
+                      <td className="py-2">
+                        {summary.todayTotal === 0
+                          ? "—"
+                          : `${summary.todayCompleted} / ${summary.todayTotal}`}
+                      </td>
                       <td className="py-2">{formatFeedTotal(summary.totalFeedConsumed)}</td>
                       <td className="py-2 text-muted-foreground">
                         {summary.lastFed ? new Date(summary.lastFed).toLocaleString() : "—"}
@@ -186,14 +221,59 @@ export default async function AdminFeedingSchedulesPage({
                     </td>
                   </tr>
                 ) : (
-                  schedules.map((s) => (
+                  schedules.map((s) => {
+                    const latestConfirmation = s.confirmations[0];
+                    const lateConfirmation = s.confirmations.find((c) => c.isLate);
+                    const isCompletedLate = s.status === "COMPLETED" && Boolean(lateConfirmation);
+                    return (
                     <tr key={s.id} className="border-b">
                       <td className="py-2">{s.pond.name}</td>
                       <td className="py-2">{s.shrimpType?.name || "—"}</td>
                       <td className="py-2">{s.feed.name}</td>
                       <td className="py-2">{new Date(s.scheduledAt).toLocaleString()}</td>
                       <td className="py-2">{s.quantity.toString()}</td>
-                      <td className="py-2">{s.status}</td>
+                      <td className="py-2">
+                        {isCompletedLate ? (
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="secondary">Completed Late</Badge>
+                            {lateConfirmation?.farmer ? (
+                              <span className="text-muted-foreground text-xs">
+                                by {lateConfirmation.farmer.name || lateConfirmation.farmer.email}
+                              </span>
+                            ) : null}
+                            {lateConfirmation?.lateReason ? (
+                              <span className="text-muted-foreground text-xs italic">
+                                Reason: {lateConfirmation.lateReason}
+                              </span>
+                            ) : null}
+                            {latestConfirmation?.notes ? (
+                              <span className="text-muted-foreground text-xs italic">
+                                Notes: {latestConfirmation.notes}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : s.status === "DELAYED" ? (
+                          <Badge variant="secondary">DELAYED</Badge>
+                        ) : s.status === "MISSED" ? (
+                          <Badge variant="destructive">MISSED</Badge>
+                        ) : s.status === "COMPLETED" ? (
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="default">COMPLETED</Badge>
+                            {latestConfirmation?.farmer ? (
+                              <span className="text-muted-foreground text-xs">
+                                by {latestConfirmation.farmer.name || latestConfirmation.farmer.email}
+                              </span>
+                            ) : null}
+                            {latestConfirmation?.notes ? (
+                              <span className="text-muted-foreground text-xs italic">
+                                Notes: {latestConfirmation.notes}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <Badge variant="outline">{s.status}</Badge>
+                        )}
+                      </td>
                       <td className="py-2 text-muted-foreground">
                         {s.assignedFarmer ? s.assignedFarmer.name || s.assignedFarmer.email : "—"}
                       </td>
@@ -229,7 +309,8 @@ export default async function AdminFeedingSchedulesPage({
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -30,10 +30,19 @@ export async function declareHarvest(formData: FormData) {
       notes,
     },
   });
-  await prisma.harvestSchedule.update({
+  const updatedSchedule = await prisma.harvestSchedule.update({
     where: { id: scheduleId },
     data: { status: "COMPLETED" },
   });
+
+  // If the schedule is linked to a pond stocking, mark the stocking as HARVESTED
+  if (updatedSchedule.pondStockingId) {
+    await prisma.pondStocking.update({
+      where: { id: updatedSchedule.pondStockingId },
+      data: { status: "HARVESTED" },
+    });
+  }
+
   await createNotificationForAdmins(
     "NEW_HARVEST",
     `Harvest declared: ${actualQty} ${unit?.abbreviation || unit?.name || "units"} for pond ${pond?.name || pondId}.`,
@@ -41,5 +50,6 @@ export async function declareHarvest(formData: FormData) {
   );
   revalidatePath("/farmer/harvest");
   revalidatePath("/admin/harvest-performance");
+  revalidatePath("/admin/pond-stockings");
   revalidatePath("/admin/notifications");
 }
