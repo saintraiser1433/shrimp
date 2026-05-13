@@ -34,7 +34,8 @@ export default async function AdminFeedingSchedulesPage({
   const page = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
   const pageSize = Math.min(50, Math.max(10, parseInt(params?.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
 
-  const [schedules, totalCount, ponds, feeds, farmers, shrimpTypes, summarySchedules] = await Promise.all([
+  const [schedules, totalCount, ponds, feeds, farmers, shrimpTypes, summarySchedules, busyPondGroups] =
+    await Promise.all([
     prisma.feedingSchedule.findMany({
       include: {
         pond: true,
@@ -77,7 +78,14 @@ export default async function AdminFeedingSchedulesPage({
       },
       orderBy: { scheduledAt: "desc" },
     }),
+    prisma.feedingSchedule.groupBy({
+      by: ["pondId"],
+      where: { status: { in: ["PENDING", "DELAYED"] } },
+    }),
   ]);
+
+  const pondIdsWithActiveOrPendingFeeding = new Set(busyPondGroups.map((g) => g.pondId));
+  const pondsAvailableForNewSchedule = ponds.filter((p) => !pondIdsWithActiveOrPendingFeeding.has(p.id));
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -139,7 +147,7 @@ export default async function AdminFeedingSchedulesPage({
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Feeding Schedules</h1>
         <CreateFeedingScheduleModal
-          ponds={ponds.map((p) => ({ id: p.id, name: p.name }))}
+          ponds={pondsAvailableForNewSchedule.map((p) => ({ id: p.id, name: p.name }))}
           feeds={feeds.map((f) => ({ id: f.id, name: f.name }))}
           farmers={farmers.map((u) => ({ id: u.id, name: u.name, email: u.email }))}
           shrimpTypes={shrimpTypes}

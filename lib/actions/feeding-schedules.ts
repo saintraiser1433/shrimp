@@ -28,6 +28,19 @@ export async function createFeedingSchedule(formData: FormData) {
   }
   const quantity = Number(formData.get("quantity"));
   const assignedFarmerId = (formData.get("assignedFarmerId") as string) || null;
+
+  const blockingCount = await prisma.feedingSchedule.count({
+    where: {
+      pondId,
+      status: { in: ["PENDING", "DELAYED"] },
+    },
+  });
+  if (blockingCount > 0) {
+    throw new Error(
+      "This pond already has a pending or delayed feeding schedule. Resolve it before creating another."
+    );
+  }
+
   await prisma.feedingSchedule.create({
     data: { pondId, feedId, shrimpTypeId, scheduledAt, quantity, assignedFarmerId },
   });
