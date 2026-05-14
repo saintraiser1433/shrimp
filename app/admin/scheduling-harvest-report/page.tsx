@@ -79,7 +79,9 @@ export default async function SchedulingHarvestReportPage() {
               <li>
                 After <strong>{FEEDING_MISS_GRACE_HOURS} hours</strong> beyond{' '}
                 <code className="text-xs">scheduledAt</code>, <strong>DELAYED → MISSED</strong>; admins get a{' '}
-                notification listing affected ponds.
+                notification listing affected ponds. When a row first becomes <strong>DELAYED</strong> or{' '}
+                <strong>MISSED</strong>, the assigned farmer receives an SMS (if they have a phone on file and
+                the SMS gateway is configured), once per transition.
               </li>
               <li>
                 Farmers may confirm feedings while <strong>PENDING</strong>, <strong>DELAYED</strong>, or{' '}

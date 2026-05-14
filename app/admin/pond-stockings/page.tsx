@@ -211,11 +211,22 @@ export default async function AdminPondStockingsPage({
                                 ? new Date(s.expectedHarvestDate).toLocaleDateString()
                                 : "—"}
                               {s.expectedHarvestQty
-                                ? ` · ${s.expectedHarvestQty.toString()}${
+                                ? ` · est. harvest ${s.expectedHarvestQty.toString()}${
                                     expectedUnit ? ` ${expectedUnit}` : ""
                                   }`
                                 : ""}
                             </span>
+                            {s.shrimpType.expectedHarvestDays != null &&
+                            s.shrimpType.expectedHarvestDays > 0 ? (
+                              <span className="text-muted-foreground text-xs">
+                                From shrimp type: stocking date + {s.shrimpType.expectedHarvestDays}{" "}
+                                harvest day(s); quantity from type default when recorded.
+                              </span>
+                            ) : s.shrimpType.expectedHarvestQty != null ? (
+                              <span className="text-muted-foreground text-xs">
+                                Expected harvest quantity from shrimp type default.
+                              </span>
+                            ) : null}
                             {readyForHarvest ? (
                               <Badge variant="secondary">Ready for harvest</Badge>
                             ) : null}

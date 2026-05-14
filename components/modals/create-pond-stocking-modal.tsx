@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createPondStocking } from "@/lib/actions/pond-stockings";
+import { computeExpectedHarvestFromStocking } from "@/lib/expected-harvest";
 
 type Pond = { id: string; name: string };
 type Unit = { id: string; name: string; abbreviation: string | null };
@@ -46,12 +47,24 @@ export function CreatePondStockingModal({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [selectedShrimpTypeId, setSelectedShrimpTypeId] = useState("");
+  const [stockedAt, setStockedAt] = useState(() => todayDateString());
   const router = useRouter();
 
   const selectedShrimpType = useMemo(
     () => shrimpTypes.find((s) => s.id === selectedShrimpTypeId) ?? null,
     [shrimpTypes, selectedShrimpTypeId],
   );
+
+  const expectedHarvestPreview = useMemo(() => {
+    if (!selectedShrimpType || !stockedAt) return null;
+    const stockedAtDate = new Date(stockedAt);
+    if (Number.isNaN(stockedAtDate.getTime())) return null;
+    return computeExpectedHarvestFromStocking({
+      stockedAt: stockedAtDate,
+      expectedHarvestDays: selectedShrimpType.expectedHarvestDays,
+      expectedHarvestQty: selectedShrimpType.expectedHarvestQty,
+    });
+  }, [selectedShrimpType, stockedAt]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -64,6 +77,7 @@ export function CreatePondStockingModal({
         setOpen(false);
         form.reset();
         setSelectedShrimpTypeId("");
+        setStockedAt(todayDateString());
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to record stocking");
@@ -72,7 +86,13 @@ export function CreatePondStockingModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setStockedAt(todayDateString());
+      }}
+    >
       <DialogTrigger asChild>
         <Button>Record stocking</Button>
       </DialogTrigger>
@@ -137,10 +157,34 @@ export function CreatePondStockingModal({
               name="stockedAt"
               type="date"
               required
-              defaultValue={todayDateString()}
+              value={stockedAt}
+              onChange={(e) => setStockedAt(e.target.value)}
               className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
             />
           </div>
+          {selectedShrimpType && expectedHarvestPreview ? (
+            <div className="bg-muted/50 rounded-md border px-3 py-2 text-sm">
+              <p className="text-foreground font-medium">Expected harvest (saved on this stocking)</p>
+              <ul className="text-muted-foreground mt-1 space-y-1 pl-4 text-xs list-disc">
+                <li>
+                  Target date:{" "}
+                  {expectedHarvestPreview.expectedHarvestDate
+                    ? expectedHarvestPreview.expectedHarvestDate.toLocaleDateString()
+                    : "— (add harvest days on the shrimp type)"}
+                </li>
+                <li>
+                  Est. harvest quantity:{" "}
+                  {expectedHarvestPreview.expectedHarvestQty
+                    ? `${expectedHarvestPreview.expectedHarvestQty}${
+                        selectedShrimpType.expectedHarvestUnitLabel
+                          ? ` ${selectedShrimpType.expectedHarvestUnitLabel}`
+                          : ""
+                      }`
+                    : "— (add default harvest qty on the shrimp type)"}
+                </li>
+              </ul>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="initialQuantity">Initial quantity</Label>

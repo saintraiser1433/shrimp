@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { sendSmsUsingSavedSettings } from "@/lib/actions/sms";
 import { FEEDING_SCHEDULE_HORIZON_DAYS } from "@/lib/constants/feeding";
+import { computeExpectedHarvestFromStocking } from "@/lib/expected-harvest";
 
 /** Rolling window of calendar days ahead for which auto schedules are ensured (today + N−1). */
 const SCHEDULE_HORIZON_DAYS = FEEDING_SCHEDULE_HORIZON_DAYS;
@@ -166,11 +167,11 @@ export async function createPondStocking(formData: FormData) {
     throw new Error("Shrimp type not found.");
   }
 
-  const expectedHarvestDate = shrimpType.expectedHarvestDays
-    ? addDays(stockedAt, shrimpType.expectedHarvestDays)
-    : null;
-  const expectedHarvestQty =
-    shrimpType.expectedHarvestQty === null ? null : shrimpType.expectedHarvestQty.toString();
+  const { expectedHarvestDate, expectedHarvestQty } = computeExpectedHarvestFromStocking({
+    stockedAt,
+    expectedHarvestDays: shrimpType.expectedHarvestDays,
+    expectedHarvestQty: shrimpType.expectedHarvestQty,
+  });
 
   const stocking = await prisma.pondStocking.create({
     data: {
